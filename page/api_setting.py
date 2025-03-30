@@ -27,17 +27,17 @@ def show_api_settings():
     st.title("API 설정")
     
     st.header("upstage")
-    upstage_api_key = st.text_input("upstage API 키", value=st.session_state.upstage_api_key, type="password")
+    upstage_api_key = st.text_input("upstage API 키 (필수)", value=st.session_state.upstage_api_key, type="password")
     st.divider()
 
     st.header("LLM")
-    anthropic_key = st.text_input("Anthropic API 키", value=st.session_state.anthropic_key, type="password")
-    openai_key = st.text_input("OpenAI API 키", value=st.session_state.openai_key, type="password")
+    anthropic_key = st.text_input("Anthropic API 키 (선택)", value=st.session_state.anthropic_key, type="password")
+    openai_key = st.text_input("OpenAI API 키 (선택)", value=st.session_state.openai_key, type="password")
     st.divider()
 
     st.header("Upbit")
-    upbit_access_key = st.text_input("Upbit Access API 키", value=st.session_state.upbit_access_key, type="password")
-    upbit_secret_key = st.text_input("Upbit Secret API 키", value=st.session_state.upbit_secret_key, type="password")
+    upbit_access_key = st.text_input("Upbit Access API 키 (필수)", value=st.session_state.upbit_access_key, type="password")
+    upbit_secret_key = st.text_input("Upbit Secret API 키 (필수)", value=st.session_state.upbit_secret_key, type="password")
     st.divider()
 
     
