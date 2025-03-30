@@ -19,7 +19,7 @@ st.set_page_config(
 main_col, chat_col = st.columns([0.65, 0.35], gap="large")
 
 with main_col:
-    portfolio_tab, strategy_tab, api_tab = st.tabs(["투자 내역", "투자 전략", "API 설정"])
+    portfolio_tab, strategy_tab, api_tab = st.tabs(["포트폴리오", "거래 내역", "투자 전략", "API 설정"])
 
     with portfolio_tab:
         show_portfolio()
@@ -33,7 +33,8 @@ with main_col:
 
 
 with chat_col:
-    # 채팅 기록 표시하는 컨테이너를 채팅 입력 필드 위에 배치
+    model_options = st.selectbox("모델 선택", ("claude 3.7 sonnet", "claude 3 haiku"))
+
     chat_container = st.container(height=700, border=True)
     
     # 사용자 입력 처리 (채팅 컨테이너 아래에 배치)
@@ -42,8 +43,9 @@ with chat_col:
         accept_file=True,
         file_type=None
     )
-    
-    # 채팅 기록 채우기 (이제 입력 필드 위에 표시됨)
+
+
+    # 채팅 기록 채우기 
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
@@ -51,12 +53,17 @@ with chat_col:
     
     if user_prompt:
         # 사용자 메시지 추가 및 표시
-        st.session_state.messages.append({"role": "user", "content": user_prompt})
+
+        user_prompt_text = user_prompt.text if user_prompt.text else ""
+        user_prompt_file = user_prompt["files"] if user_prompt["files"] else None
         
+        st.session_state.messages.append({"role": "user", "content": user_prompt_text})
+
+
         # 스트리밍 방식으로 응답 생성 및 표시
         with chat_container:
             with st.chat_message("user"):
-                st.write(user_prompt)
+                st.write(user_prompt_text)
                 
             with st.chat_message("assistant"):
                 response_placeholder = st.empty()
@@ -64,8 +71,8 @@ with chat_col:
                 
                 # 스트리밍 응답 처리
                 for chunk in stream_anthropic_response(
-                    user_prompt, 
-                    system_prompt="당신은 암호화폐 투자 전문가입니다. 사용자의 투자 관련 질문에 전문적으로 답변해주세요."
+                    user_prompt_text,
+                    model_options
                 ):
                     full_response += chunk
                     response_placeholder.markdown(full_response + "▌")

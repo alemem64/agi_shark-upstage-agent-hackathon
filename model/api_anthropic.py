@@ -1,6 +1,12 @@
 from anthropic import Anthropic
 import streamlit as st
 
+def model_name(model_options):
+    if model_options == "claude 3.7 sonnet":
+        return "claude-3-7-sonnet-latest"
+    elif model_options == "claude 3 haiku":
+        return "claude-3-haiku-20240307"
+
 def get_anthropic_response(prompt, system_prompt="You are a helpful assistant."):
     """일반적인 Anthropic API 호출"""
     
@@ -55,7 +61,7 @@ def get_anthropic_response(prompt, system_prompt="You are a helpful assistant.")
     except Exception as e:
         return f"API 요청 오류: {str(e)}"
 
-def stream_anthropic_response(prompt, system_prompt="You are a helpful assistant."):
+def stream_anthropic_response(prompt, model_options):
     """Anthropic API 스트리밍 응답 생성기"""
     api_key = st.session_state.get('anthropic_key', '')
     
@@ -68,10 +74,8 @@ def stream_anthropic_response(prompt, system_prompt="You are a helpful assistant
         client = Anthropic(api_key=api_key)
         
         with client.messages.stream(
-            model="claude-3-haiku-20240307",
+            model=model_name(model_options),
             max_tokens=1024,
-            temperature=0.7,
-            system=system_prompt,
             messages=[
                 {
                     "role": "user", 

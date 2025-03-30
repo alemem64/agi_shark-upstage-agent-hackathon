@@ -10,24 +10,36 @@ def init_api_session_state():
         st.session_state.upbit_access_key = ""
     if 'upbit_secret_key' not in st.session_state:
         st.session_state.upbit_secret_key = ""
+    if 'upstage_api_key' not in st.session_state:
+        st.session_state.upstage_api_key = ""
 
-def save_api_keys(anthropic_key, openai_key, upbit_access_key, upbit_secret_key):
+def save_api_keys(anthropic_key, openai_key, upbit_access_key, upbit_secret_key, upstage_api_key):
     """API 키를 세션 상태에 저장"""
     st.session_state.anthropic_key = anthropic_key
     st.session_state.openai_key = openai_key
     st.session_state.upbit_access_key = upbit_access_key
     st.session_state.upbit_secret_key = upbit_secret_key
+    st.session_state.upstage_api_key = upstage_api_key
     st.success("API 키가 저장되었습니다!")
 
 def show_api_settings():
     """API 설정 페이지 표시"""
     st.title("API 설정")
     
-    # 현재 저장된 값을 기본값으로 설정
+    st.header("upstage")
+    upstage_api_key = st.text_input("upstage API 키", value=st.session_state.upstage_api_key, type="password")
+    st.divider()
+
+    st.header("LLM")
     anthropic_key = st.text_input("Anthropic API 키", value=st.session_state.anthropic_key, type="password")
     openai_key = st.text_input("OpenAI API 키", value=st.session_state.openai_key, type="password")
-    upbit_access_key = st.text_input("Upbit API 키", value=st.session_state.upbit_access_key, type="password")
-    upbit_secret_key = st.text_input("Upbit API 키", value=st.session_state.upbit_secret_key, type="password")
+    st.divider()
+
+    st.header("Upbit")
+    upbit_access_key = st.text_input("Upbit Access API 키", value=st.session_state.upbit_access_key, type="password")
+    upbit_secret_key = st.text_input("Upbit Secret API 키", value=st.session_state.upbit_secret_key, type="password")
+    st.divider()
+
     
     if st.button("저장하기", type="primary"):
-        save_api_keys(anthropic_key, openai_key, upbit_access_key, upbit_secret_key)
+        save_api_keys(anthropic_key, openai_key, upbit_access_key, upbit_secret_key, upstage_api_key)
