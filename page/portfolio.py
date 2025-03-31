@@ -1,6 +1,7 @@
 import streamlit as st
 
 def show_portfolio():
+    st.title("포트폴리오")
     
     # 포트폴리오 페이지 콘텐츠
     st.write("현재 보유 중인 자산")

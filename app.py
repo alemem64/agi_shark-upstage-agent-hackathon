@@ -1,8 +1,16 @@
 import streamlit as st
-from page.portfolio import show_portfolio
-from page.api_setting import show_api_settings, init_api_session_state
+
+# import Sidebar
 from page.sidebar import show_sidebar
 
+# import Page
+from page.trade_market import show_trade_market
+from page.trade_strategy import show_trade_strategy
+from page.portfolio import show_portfolio
+from page.trade_history import show_trade_history
+from page.api_setting import show_api_settings, init_api_session_state
+
+# import Model
 from model.api_anthropic import stream_anthropic_response
 
 # 세션 상태 초기화
@@ -23,22 +31,19 @@ st.set_page_config(
 with st.sidebar:
     show_sidebar()
 
-trading_market_tab, strategy_tab, portfolio_tab, trade_history_tab, api_tab = st.tabs(["거래소", "투자 전략", "포트폴리오", "거래 내역", "API 설정"])
+trading_market_tab, trade_strategy_tab, portfolio_tab, trade_history_tab, api_tab = st.tabs(["거래소", "투자 전략", "포트폴리오", "거래 내역", "API 설정"])
 
 with trading_market_tab:
-    st.title("거래소")
-    st.write("This is the trading market page of the app.")
+    show_trade_market()
 
-with strategy_tab:
-    st.title("투자 전략")
-    st.write("This is the strategy page of the app.")
+with trade_strategy_tab:
+    show_trade_strategy()
 
 with portfolio_tab:
     show_portfolio()
 
 with trade_history_tab:
-    st.title("거래 내역")
-
+    show_trade_history()
 
 with api_tab:
     show_api_settings()
