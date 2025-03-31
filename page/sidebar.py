@@ -54,6 +54,7 @@ def show_sidebar():
 
     with chat_settings_tab:
 
+
         with st.expander("Agent 상태", expanded=True):
             agent_status_col1, agent_status_col2 = st.columns(2)
             with agent_status_col1:
@@ -72,7 +73,8 @@ def show_sidebar():
 
         with st.expander("Agent 설정", expanded=True):
             reboot_button = st.button("Agent 재부팅", use_container_width=True)
-            reboot_frequency = st.text_input("Agent 재부팅 주기 (초)", value="10")
+            reboot_frequency = st.text_input("Agent 재부팅 주기 (작동 횟수)", value="10")
+            work_frequency = st.text_input("Agent 작동 주기 (초)", value="10")
             st.session_state.model_options = st.selectbox("LLM 모델 선택", ("claude 3.7 sonnet", "claude 3 haiku"))
             toogle_col1, toogle_col2 = st.columns(2)
             with toogle_col1:
@@ -99,6 +101,7 @@ def show_sidebar():
                 value="스윙",
             )
         
+        apply_chat_settings_button = st.button("설정 적용하기", use_container_width=True, type="primary")
         
 
 

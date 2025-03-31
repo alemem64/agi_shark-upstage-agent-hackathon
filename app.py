@@ -20,12 +20,12 @@ init_api_session_state()
 if 'messages' not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
 
-st.set_page_config(
-    page_title="AI 투자 채팅봇",
-    page_icon="🦈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# st.set_page_config(
+#     page_title="AI 투자 채팅봇",
+#     page_icon="🦈",
+#     layout="wide",
+#     initial_sidebar_state="expanded"
+# )
 
 # 사이드바 표시
 with st.sidebar:

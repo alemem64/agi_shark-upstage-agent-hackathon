@@ -6,3 +6,4 @@ webdriver-manager
 html5lib
 playwright
 nest_asyncio
+pyupbit
