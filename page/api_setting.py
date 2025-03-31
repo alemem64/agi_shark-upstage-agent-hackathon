@@ -1,4 +1,25 @@
 import streamlit as st
+import pyupbit
+from typing import Optional, List, Dict
+import time
+from datetime import datetime
+import os
+
+def test_upbit_api(access_key: str, secret_key: str) -> bool:
+    """Upbit API 키 테스트"""
+    try:
+        upbit = pyupbit.Upbit(access_key, secret_key)
+        # 간단한 API 호출 테스트
+        balance = upbit.get_balance("KRW")
+        if balance is not None:
+            st.success("Upbit API 연결 성공!")
+            return True
+        else:
+            st.error("Upbit API 연결 실패: 잔고 조회 실패")
+            return False
+    except Exception as e:
+        st.error(f"Upbit API 연결 실패: {e}")
+        return False
 
 def init_api_session_state():
     """API 키 관련 세션 상태 초기화"""
@@ -23,7 +44,6 @@ def save_api_keys(anthropic_key, openai_key, upbit_access_key, upbit_secret_key,
     st.success("API 키가 저장되었습니다!")
 
 def show_api_settings():
-    """API 설정 페이지 표시"""
     st.title("API 설정")
     
     st.header("upstage")
