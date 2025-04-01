@@ -19,7 +19,7 @@ async def _save_webpage_as_pdf(url: str) -> str:
     """
     try:
         # 출력 디렉토리 고정
-        output_dir = 'webpage_pdfs'
+        output_dir = 'tools/web2pdf/always_see_doc_storage'
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
@@ -61,6 +61,6 @@ def save_webpage_as_pdf(url: str) -> str:
     Example:
         >>> pdf_path = save_webpage_as_pdf('https://example.com')
         >>> print(pdf_path)
-        'webpage_pdfs/20240220-123456_example.com.pdf'
+        'always_see_doc_storage/20240220-123456_example.com.pdf'
     """
     return asyncio.get_event_loop().run_until_complete(_save_webpage_as_pdf(url))
