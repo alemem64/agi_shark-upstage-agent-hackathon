@@ -45,7 +45,7 @@ def stream_anthropic_response(prompt, model_options):
 - 구체적인 실행 계획"""
         
         with client.messages.stream(
-            model=model_name(model_options),
+            model=get_model_name(model_options),
             max_tokens=1024,
             system=system_prompt,
             messages=[
