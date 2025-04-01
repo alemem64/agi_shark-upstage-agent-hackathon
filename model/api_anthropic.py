@@ -1,11 +1,13 @@
 from anthropic import Anthropic
 import streamlit as st
 
-def model_name(model_options):
+def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
         return "claude-3-7-sonnet-latest"
     elif model_options == "claude 3 haiku":
         return "claude-3-haiku-20240307"
+    elif model_options == "gpt 4o mini":
+        return "gpt-4o-mini"
 
 def stream_anthropic_response(prompt, model_options):
     """Anthropic API 스트리밍 응답 생성기"""
