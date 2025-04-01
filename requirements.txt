@@ -1,7 +1,5 @@
-streamlit
+streamlit>=1.44.0
 watchdog
-
-openai-agents
 anthropic
 
 webdriver-manager
@@ -9,4 +7,5 @@ html5lib
 playwright
 nest_asyncio
 pyupbit
-
+PyMuPDF
+Pillow
