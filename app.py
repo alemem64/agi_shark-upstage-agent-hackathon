@@ -228,34 +228,55 @@ with st.sidebar:
 
 # 탭 선택 기능 추가
 if 'selected_tab' not in st.session_state:
-    st.session_state.selected_tab = "거래소"
+    st.session_state.selected_tab = "API 설정"  # 기본 탭을 API 설정으로 변경
 
-# 탭 버튼 생성 - 너비 조정으로 텍스트 잘림 방지
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    if st.button("📊 거래소", use_container_width=True, 
-                type="primary" if st.session_state.selected_tab == "거래소" else "secondary"):
-        st.session_state.selected_tab = "거래소"
-        reset_api_warning()
-        st.rerun()
-with col2:
-    if st.button("💼 포트폴리오", use_container_width=True,
-                type="primary" if st.session_state.selected_tab == "포트폴리오" else "secondary"):
-        st.session_state.selected_tab = "포트폴리오"
-        reset_api_warning()
-        st.rerun()
-with col3:
-    if st.button("📝 거래 내역", use_container_width=True,
-                type="primary" if st.session_state.selected_tab == "거래 내역" else "secondary"):
-        st.session_state.selected_tab = "거래 내역"
-        reset_api_warning()
-        st.rerun()
-with col4:
-    if st.button("🔑 API 설정", use_container_width=True,
-                type="primary" if st.session_state.selected_tab == "API 설정" else "secondary"):
-        st.session_state.selected_tab = "API 설정"
-        reset_api_warning()
-        st.rerun()
+# API 키 확인
+has_api_keys = check_api_keys()
+
+# API 키가 없는 경우 강제로 API 설정 탭 표시
+if not has_api_keys and st.session_state.selected_tab != "API 설정":
+    st.session_state.selected_tab = "API 설정"
+    st.rerun()
+
+# 탭 버튼 생성 - API 키 설정에 따라 동적으로 표시
+cols = []
+
+# API 설정 탭은 항상 표시
+if has_api_keys:
+    # API 키가 있으면 모든 탭 표시
+    col1, col2, col3, col4 = st.columns(4)
+    cols = [col1, col2, col3, col4]
+    
+    with col1:
+        if st.button("📊 거래소", use_container_width=True, 
+                    type="primary" if st.session_state.selected_tab == "거래소" else "secondary"):
+            st.session_state.selected_tab = "거래소"
+            reset_api_warning()
+            st.rerun()
+    with col2:
+        if st.button("💼 포트폴리오", use_container_width=True,
+                    type="primary" if st.session_state.selected_tab == "포트폴리오" else "secondary"):
+            st.session_state.selected_tab = "포트폴리오"
+            reset_api_warning()
+            st.rerun()
+    with col3:
+        if st.button("📝 거래 내역", use_container_width=True,
+                    type="primary" if st.session_state.selected_tab == "거래 내역" else "secondary"):
+            st.session_state.selected_tab = "거래 내역"
+            reset_api_warning()
+            st.rerun()
+    with col4:
+        if st.button("🔑 API 설정", use_container_width=True,
+                    type="primary" if st.session_state.selected_tab == "API 설정" else "secondary"):
+            st.session_state.selected_tab = "API 설정"
+            reset_api_warning()
+            st.rerun()
+else:
+    # API 키가 없으면 API 설정 탭만 표시
+    col = st.columns(1)[0]
+    with col:
+        st.button("🔑 API 설정", use_container_width=True, type="primary")
+        st.info("API 키를 설정하면 거래소, 포트폴리오, 거래 내역 기능을 사용할 수 있습니다.")
 
 st.markdown("---")
 

@@ -15,25 +15,326 @@ class Trade:
         self.access_key = access_key if access_key else '{ACCESS KEY 입력 : }'
         self.secret_key = secret_key if secret_key else '{SECRET KEY 입력 : }'
         self.server_url = 'https://api.upbit.com'
-        self.upbit = pyupbit.Upbit(self.access_key, self.secret_key)
-        # API 키 확인 및 경고 메시지
-        if self.access_key == '{ACCESS KEY 입력 : }' or self.secret_key == '{SECRET KEY 입력 : }':
-            print("⚠️ 경고: 실제 API 키가 설정되지 않았습니다. 일부 기능이 제한될 수 있습니다.")
+        
+        # API 키 유효성 상태
+        self.is_valid = False
+        
+        try:
+            if self.access_key != '{ACCESS KEY 입력 : }' and self.secret_key != '{SECRET KEY 입력 : }':
+                # pyupbit 인스턴스 생성
+                self.upbit = pyupbit.Upbit(access_key, secret_key)
+                # 간단한 유효성 검사
+                try:
+                    balance = self.upbit.get_balance("KRW")
+                    if balance is not None:
+                        self.is_valid = True
+                    else:
+                        print("⚠️ 경고: API 키 인증 실패")
+                except Exception as e:
+                    print(f"⚠️ 경고: API 인증 중 오류 발생: {e}")
+            else:
+                self.upbit = None
+                print("⚠️ 경고: 실제 API 키가 설정되지 않았습니다. 일부 기능이 제한될 수 있습니다.")
+        except Exception as e:
+            self.upbit = None
+            print(f"⚠️ 경고: 업비트 API 초기화 중 오류: {e}")
+    
+    def get_order_history(self, market=None, state=None, page=1, limit=100):
+        """주문 내역 조회 (개선된 버전)"""
+        if not self.is_valid or not self.upbit:
+            return []
+            
+        try:
+            # 1. pyupbit 라이브러리 사용 시도
+            orders = []
+            market_param = market if market else ""
+            
+            # 각 상태별로 조회
+            states = [state] if state else ["wait", "done", "cancel"]
+            
+            for current_state in states:
+                try:
+                    result = self.upbit.get_order(market_param, state=current_state, limit=limit)
+                    if result:
+                        if isinstance(result, list):
+                            orders.extend(result)
+                        else:
+                            orders.append(result)
+                except Exception as e:
+                    continue
+                    
+            if orders:
+                return orders
+                
+            # 2. 직접 API 호출 시도 (fallback)
+            return self._get_orders_direct_api(market, state, limit)
+            
+        except Exception as e:
+            # 3. 에러 발생 시 직접 API 호출 시도
+            return self._get_orders_direct_api(market, state, limit)
+    
+    def _get_orders_direct_api(self, market=None, state=None, limit=100):
+        """직접 API를 호출하여 주문 내역 조회"""
+        try:
+            query = {'limit': limit}
+            
+            if market:
+                query['market'] = market
+            if state:
+                query['state'] = state
+                
+            query_string = urlencode(query).encode()
+            
+            m = hashlib.sha512()
+            m.update(query_string)
+            query_hash = m.hexdigest()
+            
+            payload = {
+                'access_key': self.access_key,
+                'nonce': str(uuid.uuid4()),
+                'query_hash': query_hash,
+                'query_hash_alg': 'SHA512'
+            }
+            
+            jwt_token = jwt.encode(payload, self.secret_key)
+            # JWT 인코딩 결과가 bytes인 경우 문자열로 변환
+            if isinstance(jwt_token, bytes):
+                jwt_token = jwt_token.decode('utf-8')
+                
+            authorize_token = f'Bearer {jwt_token}'
+            headers = {'Authorization': authorize_token}
+            
+            response = requests.get(f"{self.server_url}/v1/orders", params=query, headers=headers)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"API 요청 실패 (HTTP {response.status_code}): {response.text}")
+                return []
+        except Exception as e:
+            print(f"직접 API 호출 중 오류: {e}")
+            return []
     
     def orders_status(self, orderid): 
-        query={'uuid':f'{orderid}',}
-        query_string=urlencode(query).encode()
-        m=hashlib.sha512()
-        m.update(query_string)
-        query_hash=m.hexdigest()
+        """개별 주문 상세 조회"""
+        if not self.is_valid:
+            return {}
+            
+        try:
+            query = {'uuid': orderid}
+            query_string = urlencode(query).encode()
+            
+            m = hashlib.sha512()
+            m.update(query_string)
+            query_hash = m.hexdigest()
+            
+            payload = {
+                'access_key': self.access_key,
+                'nonce': str(uuid.uuid4()),
+                'query_hash': query_hash,
+                'query_hash_alg': 'SHA512'
+            }
+            
+            jwt_token = jwt.encode(payload, self.secret_key)
+            # JWT 인코딩 결과가 bytes인 경우 문자열로 변환
+            if isinstance(jwt_token, bytes):
+                jwt_token = jwt_token.decode('utf-8')
+                
+            authorize_token = f'Bearer {jwt_token}'
+            headers = {'Authorization': authorize_token}
+            
+            response = requests.get(f"{self.server_url}/v1/order", params=query, headers=headers)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"주문 상세 조회 실패 (HTTP {response.status_code}): {response.text}")
+                return {}
+        except Exception as e:
+            print(f"주문 상세 조회 중 오류: {e}")
+            return {}
+    
+    def get_balance(self, ticker): 
+        """특정 코인 잔고 조회"""
+        if not self.is_valid or not self.upbit:
+            return 0
+            
+        try:
+            return self.upbit.get_balance(ticker)
+        except Exception as e:
+            print(f"잔고 조회 실패: {e}")
+            try:
+                # 직접 API 호출 시도
+                query = {}
+                query_string = urlencode(query).encode()
+                
+                m = hashlib.sha512()
+                m.update(query_string)
+                query_hash = m.hexdigest()
+                
+                payload = {
+                    'access_key': self.access_key,
+                    'nonce': str(uuid.uuid4()),
+                    'query_hash': query_hash,
+                    'query_hash_alg': 'SHA512'
+                }
+                
+                jwt_token = jwt.encode(payload, self.secret_key)
+                if isinstance(jwt_token, bytes):
+                    jwt_token = jwt_token.decode('utf-8')
+                    
+                authorize_token = f'Bearer {jwt_token}'
+                headers = {'Authorization': authorize_token}
+                
+                response = requests.get(f"{self.server_url}/v1/accounts", headers=headers)
+                
+                if response.status_code == 200:
+                    accounts = response.json()
+                    for account in accounts:
+                        if account['currency'] == ticker.split('-')[-1]:
+                            return float(account['balance'])
+                    return 0
+                else:
+                    return 0
+            except Exception:
+                return 0
+    
+    def get_current_price(self, ticker): 
+        """특정 코인 현재 시세 조회"""
+        try:
+            return pyupbit.get_current_price(ticker)
+        except Exception as e:
+            print(f"현재가 조회 실패: {e}")
+            return 0
+    
+    def get_order(self, orderid): 
+        """특정 주문 정보 조회"""
+        return self.orders_status(orderid)
+    
+    def get_ohlcv(self, ticker, interval, count): 
+        """특정 코인 차트 조회"""
+        try:
+            return pyupbit.get_ohlcv(ticker, interval=interval, count=count)
+        except Exception as e:
+            print(f"차트 데이터 조회 실패: {e}")
+            return None
+    
+    def get_market_all(self): 
+        """모든 코인 시세 조회"""
+        try:
+            url = "https://api.upbit.com/v1/market/all"
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"시장 데이터 조회 실패 (HTTP {response.status_code})")
+                return []
+        except Exception as e:
+            print(f"시장 데이터 조회 중 오류: {e}")
+            return []
+    
+    def get_market_detail(self, market): 
+        """특정 코인 상세 정보 조회"""
+        try:
+            return pyupbit.get_market_detail(market)
+        except Exception as e:
+            print(f"시장 상세 정보 조회 실패: {e}")
+            return {}
+    
+    def buy_market_order(self, ticker, amount): 
+        """시장가 매수 주문"""
+        if not self.is_valid or not self.upbit:
+            print("유효한 API 키가 설정되지 않아 주문을 실행할 수 없습니다.")
+            return None
+            
+        try:
+            result = self.upbit.buy_market_order(ticker, amount)
+            print(f"시장가 매수 주문: {ticker}, {amount}KRW")
+            return result
+        except Exception as e:
+            print(f"시장가 매수 주문 실패: {e}")
+            return None
 
-        payload={'access_key':self.access_key, 'nonce':str(uuid.uuid4()), 'query_hash':query_hash, 'query_hash_alg':'SHA512'}
-        jwt_token=jwt.encode(payload, self.secret_key)
-        authorization='Bearer {}'.format(jwt_token)
-        headers={'Authorization':authorization}
 
-        res=requests.get(self.server_url+"/v1/order", params=query, headers=headers)
-        return res.json()
+    def sell_market_order(self, ticker, volume=None): 
+        """시장가 매도 주문"""
+        if not self.is_valid or not self.upbit:
+            print("유효한 API 키가 설정되지 않아 주문을 실행할 수 없습니다.")
+            return None
+            
+        try:
+            if volume is None:
+                # 전량 매도
+                available_volume = self.upbit.get_balance(ticker)
+                if available_volume > 0:
+                    result = self.upbit.sell_market_order(ticker, available_volume)
+                    print(f"전량 시장가 매도 주문: {ticker}, {available_volume}{ticker.split('-')[1]}")
+                    return result
+                else:
+                    print(f"매도할 {ticker} 수량이 없습니다.")
+                    return None
+            else:
+                # 지정 수량 매도
+                result = self.upbit.sell_market_order(ticker, volume)
+                print(f"시장가 매도 주문: {ticker}, {volume}{ticker.split('-')[1]}")
+                return result
+        except Exception as e:
+            print(f"시장가 매도 주문 실패: {e}")
+            return None
+
+    def buy_limit_order(self, ticker, price, volume): 
+        """지정가 매수 주문"""
+        if not self.is_valid or not self.upbit:
+            print("유효한 API 키가 설정되지 않아 주문을 실행할 수 없습니다.")
+            return None
+            
+        try:
+            result = self.upbit.buy_limit_order(ticker, price, volume)
+            print(f"지정가 매수 주문: {ticker}, 가격: {price}KRW, 수량: {volume}")
+            return result
+        except Exception as e:
+            print(f"지정가 매수 주문 실패: {e}")
+            return None
+
+    def sell_limit_order(self, ticker, price, volume=None): 
+        """지정가 매도 주문"""
+        if not self.is_valid or not self.upbit:
+            print("유효한 API 키가 설정되지 않아 주문을 실행할 수 없습니다.")
+            return None
+            
+        try:
+            if volume is None:
+                # 전량 매도
+                available_volume = self.upbit.get_balance(ticker)
+                if available_volume > 0:
+                    result = self.upbit.sell_limit_order(ticker, price, available_volume)
+                    print(f"전량 지정가 매도 주문: {ticker}, 가격: {price}KRW, 수량: {available_volume}")
+                    return result
+                else:
+                    print(f"매도할 {ticker} 수량이 없습니다.")
+                    return None
+            else:
+                # 지정 수량 매도
+                result = self.upbit.sell_limit_order(ticker, price, volume)
+                print(f"지정가 매도 주문: {ticker}, 가격: {price}KRW, 수량: {volume}")
+                return result
+        except Exception as e:
+            print(f"지정가 매도 주문 실패: {e}")
+            return None
+
+    def cancel_order(self, uuid): 
+        """주문 취소"""
+        if not self.is_valid or not self.upbit:
+            print("유효한 API 키가 설정되지 않아 주문 취소를 실행할 수 없습니다.")
+            return None
+            
+        try:
+            result = self.upbit.cancel_order(uuid)
+            print(f"주문 취소: {uuid}")
+            return result
+        except Exception as e:
+            print(f"주문 취소 실패: {e}")
+            return None
 
     def Strategy(self, ticker, k):
         df=pyupbit.get_ohlcv(ticker, interval="day", count=200)
@@ -65,151 +366,6 @@ class Trade:
         self.schedule_job()
         self.run()
     
-    def get_balance(self, ticker): #특정 코인 잔고 조회
-        try:
-            return self.upbit.get_balance(ticker)
-        except Exception as e:
-            print(f"잔고 조회 실패: {e}")
-            return 0  # 기본값으로 0 반환
-    
-    def get_current_price(self, ticker): # 특정 코인 현재 시세 조회
-        return pyupbit.get_current_price(ticker)    
-    
-    def get_order(self, orderid): # 특정 주문정보 조회
-        return self.orders_status(orderid)
-    
-    def get_ohlcv(self, ticker, interval, count): # 특정 코인 차트 조회
-        return pyupbit.get_ohlcv(ticker, interval=interval, count=count)    
-    
-    def get_market_all(self): # 모든 코인 시세 조회
-        url = "https://api.upbit.com/v1/market/all"
-        response = requests.get(url)
-        return response.json()  
-    
-    def get_market_detail(self, market): # 특정 코인 상세 정보 조회
-        return pyupbit.get_market_detail(market)
-    
-    def buy_market_order(self, ticker, amount): # 시장가 매수 주문
-        """
-        시장가 매수 주문
-        
-        Args:
-            ticker (str): 코인 티커 (예: "KRW-BTC")
-            amount (float): 매수할 금액(KRW)
-        
-        Returns:
-            dict: 주문 결과
-        """
-        try:
-            result = self.upbit.buy_market_order(ticker, amount)
-            print(f"시장가 매수 주문: {ticker}, {amount}KRW")
-            return result
-        except Exception as e:
-            print(f"시장가 매수 주문 실패: {e}")
-            return None
-
-
-    def sell_market_order(self, ticker, volume=None): # 시장가 매도 주문
-        """
-        시장가 매도 주문
-
-        Args:
-            ticker (str): 코인 티커 (예: "KRW-BTC")
-            volume (float, optional): 매도할 수량. None이면 전량 매도
-
-        Returns:
-            dict: 주문 결과
-        """
-        try:
-            if volume is None:
-                # 전량 매도
-                available_volume = self.upbit.get_balance(ticker)
-                if available_volume > 0:
-                    result = self.upbit.sell_market_order(ticker, available_volume)
-                    print(f"전량 시장가 매도 주문: {ticker}, {available_volume}{ticker.split('-')[1]}")
-                    return result
-                else:
-                    print(f"매도할 {ticker} 수량이 없습니다.")
-                    return None
-            else:
-                # 지정 수량 매도
-                result = self.upbit.sell_market_order(ticker, volume)
-                print(f"시장가 매도 주문: {ticker}, {volume}{ticker.split('-')[1]}")
-                return result
-        except Exception as e:
-            print(f"시장가 매도 주문 실패: {e}")
-            return None
-
-    def buy_limit_order(self, ticker, price, volume): # 지정가 매수 주문
-        """
-        지정가 매수 주문
-    
-        Args:
-            ticker (str): 코인 티커 (예: "KRW-BTC")
-            price (float): 매수 희망 가격
-            volume (float): 매수 수량
-        
-        Returns:
-            dict: 주문 결과
-        """
-        try:
-            result = self.upbit.buy_limit_order(ticker, price, volume)
-            print(f"지정가 매수 주문: {ticker}, 가격: {price}KRW, 수량: {volume}")
-            return result
-        except Exception as e:
-            print(f"지정가 매수 주문 실패: {e}")
-            return None
-
-    def sell_limit_order(self, ticker, price, volume=None): # 지정가 매도 주문
-        """
-        지정가 매도 주문
-    
-        Args:
-            ticker (str): 코인 티커 (예: "KRW-BTC")
-            price (float): 매도 희망 가격
-            volume (float, optional): 매도 수량. None이면 전량 매도
-        
-        Returns:
-            dict: 주문 결과
-        """
-        try:
-            if volume is None:
-                # 전량 매도
-                available_volume = self.upbit.get_balance(ticker)
-                if available_volume > 0:
-                    result = self.upbit.sell_limit_order(ticker, price, available_volume)
-                    print(f"전량 지정가 매도 주문: {ticker}, 가격: {price}KRW, 수량: {available_volume}")
-                    return result
-                else:
-                    print(f"매도할 {ticker} 수량이 없습니다.")
-                    return None
-            else:
-                # 지정 수량 매도
-                result = self.upbit.sell_limit_order(ticker, price, volume)
-                print(f"지정가 매도 주문: {ticker}, 가격: {price}KRW, 수량: {volume}")
-                return result
-        except Exception as e:
-            print(f"지정가 매도 주문 실패: {e}")
-            return None
-
-    def cancel_order(self, uuid): # 주문 취소
-        """
-        주문 취소
-    
-        Args:
-            uuid (str): 취소할 주문의 UUID
-        
-        Returns:
-            dict: 취소 결과
-        """
-        try:
-            result = self.upbit.cancel_order(uuid)
-            print(f"주문 취소: {uuid}")
-            return result
-        except Exception as e:
-            print(f"주문 취소 실패: {e}")
-            return None
-
     def auto_trade(self, ticker, invest_amount, strategy="vb", k=0.5): # 자동 매매 실행
         """
         자동 매매 실행

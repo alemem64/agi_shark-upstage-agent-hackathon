@@ -166,17 +166,8 @@ def show_api_settings():
                 st.success("API 연동이 완료되었습니다. 모든 페이지에서 실제 데이터가 표시됩니다.")
                 st.balloons()  # 축하 효과
                 
-                # 2초 후 다른 페이지로 이동하는 버튼 표시
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if st.button("거래소로 이동", type="primary"):
-                        st.session_state.selected_tab = "거래소"
-                        st.rerun()
-                with col2:
-                    if st.button("포트폴리오로 이동"):
-                        st.session_state.selected_tab = "포트폴리오"
-                        st.rerun()
-                with col3:
-                    if st.button("거래 내역으로 이동"):
-                        st.session_state.selected_tab = "거래 내역"
-                        st.rerun()
+                # 자동으로 다른 페이지로 이동
+                st.info("실제 데이터를 가져오기 위해 페이지를 새로고침합니다...")
+                time.sleep(2)  # 사용자가 메시지를 읽을 시간을 줍니다
+                st.session_state.selected_tab = "포트폴리오"  # 기본적으로 포트폴리오 페이지로 이동
+                st.rerun()
