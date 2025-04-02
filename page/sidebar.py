@@ -2,6 +2,7 @@ import streamlit as st
 from model.api_anthropic import stream_anthropic_response
 from datetime import datetime
 from model.document_parser_agent import DocumentParserAgent
+from model.X_agent import X_Agent
 
 def show_sidebar():
     st.title("암호화폐 거래 AI Agent")
@@ -43,47 +44,28 @@ def show_sidebar():
         if user_prompt:
             st.session_state.agent_run_count += 1
             user_prompt_text = user_prompt.text if user_prompt.text else ""
-            user_prompt_file = user_prompt.get("files", [None])[0] if user_prompt.get("files") else None
-            
-            # 파일이 업로드된 경우 문서 분석 수행
+            user_prompt_file = None
+            # 문서 처리만 유지
             document_text = ""
             if user_prompt_file:
                 parser = DocumentParserAgent()
                 result = parser.parse_document(user_prompt_file.getvalue(), user_prompt_file.name)
-                
                 if result['success']:
                     document_text = f"\n\n참고 문서 내용:\n{result['text']}"
-                    st.session_state.messages.append({
-                        "role": "system",
-                        "content": f"사용자가 업로드한 문서 '{result['metadata']['file_name']}'의 내용입니다: {document_text}"
-                    })
-                else:
-                    st.error(f"문서 분석 실패: {result['error']}")
             
-            # 사용자 메시지와 문서 내용을 합쳐서 전달
-            full_prompt = user_prompt_text + document_text
+            full_prompt = user_prompt_text + document_text  # search_info 제거
             st.session_state.messages.append({"role": "user", "content": user_prompt_text})
             
-            # 스트리밍 방식으로 응답 생성 및 표시
             with chat_container:
                 with st.chat_message("user"):
                     st.write(user_prompt_text)
-                    
                 with st.chat_message("assistant"):
                     response_placeholder = st.empty()
                     full_response = ""
-                    
-                    for chunk in stream_anthropic_response(
-                        full_prompt,
-                        st.session_state.model_options
-                    ):
+                    for chunk in stream_anthropic_response(full_prompt, st.session_state.model_options):
                         full_response += chunk
                         response_placeholder.markdown(full_response + "▌")
-                    
-                    # 최종 응답으로 업데이트
                     response_placeholder.markdown(full_response)
-                    
-                    # 응답 기록에 저장
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     with chat_settings_tab:
