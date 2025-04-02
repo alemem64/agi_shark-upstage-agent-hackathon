@@ -4,6 +4,7 @@ from typing import Optional, List, Dict
 import time
 from datetime import datetime
 import os
+import tweepy
 
 def test_upbit_api(access_key: str, secret_key: str) -> bool:
     """Upbit API 키 테스트"""
@@ -33,14 +34,17 @@ def init_api_session_state():
         st.session_state.upbit_secret_key = ""
     if 'upstage_api_key' not in st.session_state:
         st.session_state.upstage_api_key = ""
+    if 'X_bearer_token' not in st.session_state:
+        st.session_state.X_bearer_token = ""
 
-def save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key):
+def save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token):
     """API 키를 세션 상태에 저장"""
     st.session_state.openai_key = openai_key
     st.session_state.anthropic_key = anthropic_key
     st.session_state.upbit_access_key = upbit_access_key
     st.session_state.upbit_secret_key = upbit_secret_key
     st.session_state.upstage_api_key = upstage_api_key
+    st.session_state.X_bearer_token = X_bearer_token
     st.success("API 키가 저장되었습니다!")
 
 def show_api_settings():
@@ -60,6 +64,8 @@ def show_api_settings():
     upbit_secret_key = st.text_input("Upbit Secret API 키 (필수)", value=st.session_state.upbit_secret_key, type="password")
     st.divider()
 
-    
+    st.header("X")
+    X_bearer_token = st.text_input("X bearer API 키 (선택)", type="password")
+
     if st.button("저장하기", type="primary"):
-        save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key)
+        save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token)
