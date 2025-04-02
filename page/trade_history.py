@@ -37,17 +37,17 @@ def format_date(date_string: str) -> str:
             return date_string
 
 @st.cache_data(ttl=300)  # 5분 캐시로 증가
-def get_order_history_from_trade(upbit_trade) -> pd.DataFrame:
+def get_order_history_from_trade(_upbit_trade) -> pd.DataFrame:
     """주문 내역 조회"""
     try:
         # 최종 주문 내역 리스트
         orders = []
         
         # 실제 거래소에서 데이터 가져오기 시도
-        if upbit_trade:
+        if _upbit_trade:
             try:
                 # 방법 1: 전체 주문 내역 조회 시도
-                all_orders = upbit_trade.upbit.get_order("", state="done", limit=100)
+                all_orders = _upbit_trade.upbit.get_order("", state="done", limit=100)
                 if all_orders:
                     if isinstance(all_orders, list):
                         orders.extend(all_orders)
@@ -62,7 +62,7 @@ def get_order_history_from_trade(upbit_trade) -> pd.DataFrame:
                     for ticker in major_tickers:
                         try:
                             # 해당 코인의 완료된 주문 내역 가져오기
-                            coin_orders = upbit_trade.upbit.get_order(ticker, state="done")
+                            coin_orders = _upbit_trade.upbit.get_order(ticker, state="done")
                             if coin_orders:
                                 if isinstance(coin_orders, list):
                                     orders.extend(coin_orders)
@@ -260,6 +260,23 @@ def show_trade_history():
     if st.button("🔄 새로고침", key="history_refresh"):
         st.cache_data.clear()
         st.rerun()
+        
+    # 거래 내역 설명 추가
+    history_info = """
+    <div class="data-container">
+        <div class="data-label">거래 내역 설명</div>
+        <ul style="margin-top: 5px; padding-left: 20px;">
+            <li><strong>코인</strong>: 거래한 암호화폐 종류</li>
+            <li><strong>주문시간</strong>: 거래가 발생한 시간</li>
+            <li><strong>주문유형</strong>: 매수(빨간색) 또는 매도(파란색)</li>
+            <li><strong>상태</strong>: 거래의 현재 상태(완료, 대기, 취소)</li>
+            <li><strong>가격</strong>: 코인 단위당 거래 가격</li>
+            <li><strong>수량</strong>: 거래한 코인의 수량</li>
+            <li><strong>거래금액</strong>: 총 거래 금액(가격 × 수량)</li>
+        </ul>
+    </div>
+    """
+    st.write(history_info, unsafe_allow_html=True)
     
     # 주문 내역 가져오기
     orders_df = get_order_history_from_trade(upbit_trade)
@@ -336,36 +353,30 @@ def show_trade_history():
                 with st.container():
                     # 배경색 설정
                     if order["주문유형"] == "매수":
-                        st.markdown("""
-                            <div style="background-color: rgba(255, 240, 240, 0.3); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                        """, unsafe_allow_html=True)
+                        card_style = "background-color: rgba(255, 240, 240, 0.3);"
                     else:  # 매도
-                        st.markdown("""
-                            <div style="background-color: rgba(240, 240, 255, 0.3); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                        """, unsafe_allow_html=True)
+                        card_style = "background-color: rgba(240, 240, 255, 0.3);"
                     
-                    col1, col2, col3 = st.columns([2, 2, 1])
-                    
-                    with col1:
-                        st.markdown(f"**코인**: {order['코인']}")
-                        st.markdown(f"**주문시간**: {order['주문시간']}")
-                        
-                    with col2:
-                        order_type_text = order["주문유형"]
-                        order_type_color = "red" if order["주문유형"] == "매수" else "blue"
-                        st.markdown(f"**주문유형**: <span style='color:{order_type_color}'>{order_type_text}</span>", unsafe_allow_html=True)
-                        
-                        status_text = order["상태"]
-                        status_color = "green" if status_text == "완료" else "orange" if status_text == "대기" else "gray"
-                        st.markdown(f"**상태**: <span style='color:{status_color}'>{status_text}</span>", unsafe_allow_html=True)
-                    
-                    with col3:
-                        st.markdown(f"**가격**: {order['주문가격']:,.0f} KRW")
-                        st.markdown(f"**수량**: {order['주문수량']:.8f}")
-                        
-                    st.markdown(f"**거래금액**: {order['주문금액']:,.0f} KRW")
-                    
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    order_card = f"""
+                    <div class="data-container" style="{card_style}">
+                        <div style="display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px;">
+                            <div>
+                                <p><strong>코인:</strong> {order['코인']}</p>
+                                <p><strong>주문시간:</strong> {order['주문시간']}</p>
+                            </div>
+                            <div>
+                                <p><strong>주문유형:</strong> <span style="color: {'red' if order['주문유형'] == '매수' else 'blue'};">{order['주문유형']}</span></p>
+                                <p><strong>상태:</strong> <span style="color: {'green' if order['상태'] == '완료' else 'orange' if order['상태'] == '대기' else 'gray'};">{order['상태']}</span></p>
+                            </div>
+                            <div>
+                                <p><strong>가격:</strong> {order['주문가격']:,.0f} KRW</p>
+                                <p><strong>수량:</strong> {order['주문수량']:.8f}</p>
+                            </div>
+                        </div>
+                        <p style="margin-top: 10px;"><strong>거래금액:</strong> {order['주문금액']:,.0f} KRW</p>
+                    </div>
+                    """
+                    st.write(order_card, unsafe_allow_html=True)
             
             # 페이지네이션 컨트롤
             if total_pages > 1:
@@ -375,7 +386,8 @@ def show_trade_history():
                         st.session_state.history_page -= 1
                         st.rerun()
                 with col2:
-                    st.markdown(f"<div style='text-align:center'>페이지 {st.session_state.history_page + 1} / {total_pages}</div>", unsafe_allow_html=True)
+                    paging_info = f"<div style='text-align:center'>페이지 {st.session_state.history_page + 1} / {total_pages}</div>"
+                    st.write(paging_info, unsafe_allow_html=True)
                 with col3:
                     if st.button("다음 ▶️", key="next_history", disabled=st.session_state.history_page >= total_pages - 1):
                         st.session_state.history_page += 1

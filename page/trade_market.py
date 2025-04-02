@@ -438,14 +438,14 @@ def draw_candle_chart(data, coin_name, interval):
     
     st.plotly_chart(fig_volume, use_container_width=True)
 
-def show_coin_details(upbit_trade, coin_ticker: str):
+def show_coin_details(_upbit_trade, coin_ticker: str):
     """코인 상세 정보 표시"""
     try:
         # 코인 이름 추출
         coin_name = coin_ticker.split('-')[1]
         
         # 거래소 API 연결 확인
-        if upbit_trade is None:
+        if _upbit_trade is None:
             st.warning("API 키가 설정되지 않아 샘플 데이터를 표시합니다.")
             # 샘플 데이터 표시
             current_price = 50000000 if coin_name == "BTC" else 3000000 if coin_name == "ETH" else 500
@@ -454,40 +454,55 @@ def show_coin_details(upbit_trade, coin_ticker: str):
         else:
             # 현재가 조회
             try:
-                current_price = upbit_trade.get_current_price(coin_ticker)
+                current_price = _upbit_trade.get_current_price(coin_ticker)
                 if not current_price:
                     # API 호출 실패 시 샘플 데이터 사용
                     current_price = 50000000 if coin_name == "BTC" else 3000000 if coin_name == "ETH" else 500
             except Exception as e:
-                st.error(f"{coin_name} 현재가 조회 실패: {str(e)}")
+                print(f"{coin_name} 현재가 조회 실패: {str(e)}")
                 current_price = 50000000 if coin_name == "BTC" else 3000000 if coin_name == "ETH" else 500
             
             # 계좌 잔고 조회
             try:
-                krw_balance = upbit_trade.get_balance("KRW")
+                krw_balance = _upbit_trade.get_balance("KRW")
                 if not krw_balance:
                     krw_balance = 1000000
             except:
                 krw_balance = 1000000
                 
             try:
-                coin_balance = upbit_trade.get_balance(coin_name)
+                coin_balance = _upbit_trade.get_balance(coin_name)
                 if not coin_balance:
                     coin_balance = 0
             except:
                 coin_balance = 0
         
-        # UI 구성
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("현재가", f"{current_price:,} KRW")
-        
-        with col2:
-            st.metric("매수 가능 금액", f"{krw_balance:,} KRW")
-        
-        with col3:
-            st.metric("보유량", f"{coin_balance:,} {coin_name}")
+        # UI 구성 - 인라인 스타일로 직접 HTML 요소 렌더링
+        st.markdown(
+            f"""
+            <div style="background-color: #ffffff; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #e6e6e6; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <p style="font-weight: bold; margin-bottom: 0.25rem; color: #444;">코인 거래 정보</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e6e6e6;">
+                        <div style="font-weight: bold; margin-bottom: 0.25rem; color: #444;">현재가</div>
+                        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">{current_price:,} KRW</div>
+                        <div style="font-size: 0.8rem; color: #666;">해당 코인의 현재 시장 가격</div>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e6e6e6;">
+                        <div style="font-weight: bold; margin-bottom: 0.25rem; color: #444;">매수 가능 금액</div>
+                        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">{krw_balance:,} KRW</div>
+                        <div style="font-size: 0.8rem; color: #666;">보유 KRW 잔액</div>
+                    </div>
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e6e6e6;">
+                        <div style="font-weight: bold; margin-bottom: 0.25rem; color: #444;">보유량</div>
+                        <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">{coin_balance:,} {coin_name}</div>
+                        <div style="font-size: 0.8rem; color: #666;">현재 보유중인 코인 수량</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         
         # 차트 기간 선택
         chart_interval = st.radio(
@@ -519,7 +534,7 @@ def show_coin_details(upbit_trade, coin_ticker: str):
         draw_candle_chart(chart_data, coin_name, interval)
         
         # API 키가 없으면 매수/매도 UI 표시하지 않음
-        if upbit_trade is None:
+        if _upbit_trade is None:
             st.info("실제 거래를 하려면 API 설정 탭에서 API 키를 설정하세요.")
             return
             
@@ -549,7 +564,7 @@ def show_coin_details(upbit_trade, coin_ticker: str):
             if st.button("매수 주문", key=f"{coin_name}_buy_button"):
                 with st.spinner("주문 처리 중..."):
                     try:
-                        result = upbit_trade.buy_market_order(coin_ticker, buy_amount)
+                        result = _upbit_trade.buy_market_order(coin_ticker, buy_amount)
                         if result:
                             st.success(f"매수 주문이 접수되었습니다. 주문번호: {result.get('uuid', '알 수 없음')}")
                         else:
@@ -582,7 +597,7 @@ def show_coin_details(upbit_trade, coin_ticker: str):
                 else:
                     with st.spinner("주문 처리 중..."):
                         try:
-                            result = upbit_trade.sell_market_order(coin_ticker, sell_quantity)
+                            result = _upbit_trade.sell_market_order(coin_ticker, sell_quantity)
                             if result:
                                 st.success(f"매도 주문이 접수되었습니다. 주문번호: {result.get('uuid', '알 수 없음')}")
                             else:
@@ -591,7 +606,7 @@ def show_coin_details(upbit_trade, coin_ticker: str):
                             st.error(f"매도 주문 중 오류 발생: {str(e)}")
     
     except Exception as e:
-        st.error(f"코인 상세 정보 표시 중 오류 발생: {str(e)}")
+        print(f"코인 상세 정보 표시 중 오류 발생: {str(e)}")
         # 오류 발생 시 간단한 오류 정보 표시
         st.info(f"{coin_ticker}에 대한 정보를 불러오는 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.")
 
@@ -619,20 +634,70 @@ def show_trade_market():
     
     if not important_coins.empty:
         # 주요 코인 및 주목할만한 코인 표시
-        st.markdown("### 💰 주요 코인 및 주목할만한 코인")
+        st.markdown(
+            """
+            ### 💰 주요 코인
+            <div style="background-color: #ffffff; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #e6e6e6; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="font-weight: bold; margin-bottom: 0.25rem; color: #444;">거래소 정보 안내</div>
+                <ul style="margin-top: 5px; padding-left: 20px;">
+                    <li><strong>코인</strong>: 암호화폐 티커 심볼</li>
+                    <li><strong>현재가</strong>: 해당 코인의 최신 거래 가격</li>
+                    <li><strong>변동률</strong>: 24시간 기준 가격 변화 비율(%)</li>
+                </ul>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+        
+        # 데이터프레임 형식으로 변환하여 스타일링 적용
+        df = important_coins.copy()
+        
+        # 변동률 열에 따라 색상 적용 (양수는 녹색, 음수는 빨간색)
+        def highlight_change(val):
+            # 문자열에서 화살표를 제거하고 +/- 기호와 % 기호를 제거한 후 숫자로 변환
+            try:
+                # 화살표와 공백 제거 후 +/- 부호 포함된 숫자만 추출
+                num_str = val.replace('↑', '').replace('↓', '').strip()
+                # % 기호 제거
+                num_str = num_str.replace('%', '')
+                # 숫자로 변환
+                num_val = float(num_str)
+                color = '#28a745' if num_val >= 0 else '#dc3545'
+                return f'color: {color}; font-weight: bold'
+            except:
+                # 변환 불가능한 경우 기본값 반환
+                return 'color: #212529'
+        
+        # 변동률 열에 화살표 추가 (이미 변환된 경우 건너뛰기)
+        if not isinstance(df['변동률'].iloc[0], str):
+            df['변동률'] = df['변동률'].apply(lambda x: f"{'↑' if x >= 0 else '↓'} {x:+.2f}%")
+        
+        # 현재가에 천 단위 콤마 적용
+        df['현재가'] = df['현재가'].apply(lambda x: f"{x:,.0f} KRW")
+        
+        # 표시할 열만 선택 (코인, 현재가, 변동률)
+        display_df = df[['코인', '현재가', '변동률']]
+        
+        # 스타일링된 테이블 표시
         st.dataframe(
-            important_coins.style.format({
-                '현재가': '{:,.0f}',
-                '전일종가': '{:,.0f}',
-                '변동률': '{:+.2f}%',
-                '거래량': '{:,.0f}',
-                '거래대금': '{:,.0f}'
-            }),
+            display_df.style
+            .map(lambda _: 'text-align: left; padding: 0.5rem;', subset=['코인'])
+            .map(lambda _: 'text-align: right; padding: 0.5rem;', subset=['현재가'])
+            .map(highlight_change, subset=['변동률'])
+            .set_properties(**{
+                'background-color': '#ffffff',
+                'border': '1px solid #e6e6e6',
+                'border-collapse': 'collapse',
+                'font-size': '14px',
+                'text-align': 'right',
+                'padding': '0.5rem'
+            })
+            .hide(axis='index'),
             use_container_width=True,
-            height=300
+            height=min(len(df) * 50 + 38, 300)  # 테이블 높이 동적 계산 (최대 300px)
         )
     else:
-        st.error("코인 정보를 불러오지 못했습니다.")
+        st.info("코인 정보를 불러오는 중입니다...")
         # 샘플 데이터 생성 및 표시
         sample_data = generate_sample_market_data()
         st.dataframe(
