@@ -17,8 +17,6 @@ from page.portfolio import show_portfolio
 from page.trade_history import show_trade_history
 from page.api_setting import show_api_settings, init_api_session_state
 
-# import Model
-from model.api_anthropic import stream_anthropic_response
 
 # 세션 상태 초기화
 init_api_session_state()
