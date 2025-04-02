@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 
-class DocumentParserAgent:
+class DocumentParser:
     def __init__(self):
         self.api_key = st.session_state.upstage_api_key
         self.url = "https://api.upstage.ai/v1/document-ai/document-parse"

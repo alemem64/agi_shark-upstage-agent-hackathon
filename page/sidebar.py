@@ -4,7 +4,7 @@ import uuid
 
 from model.open_ai_agent import stream_openai_response
 from datetime import datetime
-from model.document_parser_agent import DocumentParserAgent
+from tools.document_parser.document_parser import DocumentParser
 
 def show_sidebar():
     st.title("암호화폐 거래 AI Agent")
