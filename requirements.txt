@@ -1,6 +1,7 @@
 streamlit>=1.44.0
 watchdog
 anthropic
+openai-agents
 
 webdriver-manager
 html5lib
