@@ -1,5 +1,8 @@
 import streamlit as st
-from model.api_anthropic import stream_anthropic_response
+import asyncio
+import uuid
+
+from model.open_ai_agent import stream_openai_response
 from datetime import datetime
 from model.document_parser_agent import DocumentParserAgent
 
@@ -13,6 +16,10 @@ def show_sidebar():
     
     if 'agent_start_time' not in st.session_state:
         st.session_state.agent_start_time = None
+
+    # 세션 상태 초기화 부분에 conversation_id 추가
+    if 'conversation_id' not in st.session_state:
+        st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
 
     # Agent 실행 시간 계산 함수
     def calculate_runtime():
@@ -63,6 +70,9 @@ def show_sidebar():
             # 사용자 메시지와 문서 내용을 합쳐서 전달
             full_prompt = user_prompt_text + document_text
             st.session_state.messages.append({"role": "user", "content": user_prompt_text})
+
+
+            print(full_prompt)
             
             # 스트리밍 방식으로 응답 생성 및 표시
             with chat_container:
@@ -71,17 +81,68 @@ def show_sidebar():
                     
                 with st.chat_message("assistant"):
                     response_placeholder = st.empty()
+                    # 스트리밍 응답 처리
+                    # 이벤트 루프 생성 및 관리 방식 변경
                     full_response = ""
+                    sent_data = f"입력: {full_prompt[:50]}..., 모델: {st.session_state.model_options}"
+                    print(f"요청 데이터: {sent_data}")
+
+                    try:
+                        # 기존 이벤트 루프 가져오기 시도
+                        try:
+                            loop = asyncio.get_event_loop()
+                        except RuntimeError:
+                            # 이벤트 루프가 없으면 새로 생성
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                        
+                        # 비동기 코루틴 함수
+                        async def process_chunks():
+                            nonlocal full_response
+                            full_response = ""
+                            try:
+                                async for chunk in stream_openai_response(
+                                    full_prompt,
+                                    st.session_state.model_options,
+                                    st.session_state.conversation_id
+                                ):
+                                    print(f"청크 수신: {len(chunk)} 바이트")
+                                    full_response += chunk
+                                    response_placeholder.markdown(full_response + "▌")
+                                
+                                response_placeholder.markdown(full_response)
+                                return full_response
+                            except Exception as e:
+                                error_msg = f"응답 생성 중 오류: {str(e)}"
+                                print(error_msg)
+                                response_placeholder.markdown(error_msg)
+                                return error_msg
+                        
+                        # 기존 루프에서 실행하거나 새 루프에서 실행
+                        if loop.is_running():
+                            print("기존 이벤트 루프 사용 중")
+                            task = asyncio.create_task(process_chunks())
+                            full_response = st.session_state.get("_temp_response", "")
+                            st.session_state["_temp_task"] = task
+                        else:
+                            print("새 이벤트 루프 실행")
+                            full_response = loop.run_until_complete(
+                                asyncio.wait_for(process_chunks(), timeout=60)
+                            )
+                        
+                        print(f"응답 완료: {len(full_response)} 자")
+                        
+                    except asyncio.TimeoutError:
+                        full_response = "응답 생성 시간이 초과되었습니다. 다시 시도해주세요."
+                        response_placeholder.markdown(full_response)
+                        print("타임아웃 발생")
+                    except Exception as e:
+                        full_response = f"오류 발생: {str(e)}"
+                        response_placeholder.markdown(full_response)
+                        print(f"예외 발생: {str(e)}")
                     
-                    for chunk in stream_anthropic_response(
-                        full_prompt,
-                        st.session_state.model_options
-                    ):
-                        full_response += chunk
-                        response_placeholder.markdown(full_response + "▌")
-                    
-                    # 최종 응답으로 업데이트
-                    response_placeholder.markdown(full_response)
+
+    
                     
                     # 응답 기록에 저장
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
@@ -112,7 +173,10 @@ def show_sidebar():
                 st.session_state.agent_run_count = 0
                 st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
                 st.session_state.agent_start_time = datetime.now()
+                # 대화 ID 초기화
+                st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
                 st.success("Agent가 재부팅되었습니다.")
+                st.rerun()
             reboot_frequency = st.text_input("Agent 재부팅 주기 (작동 횟수)", value="10")
 
             # 재부팅 주기 체크 및 LLM 초기화
@@ -123,11 +187,12 @@ def show_sidebar():
                     st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]  # 채팅 기록 초기화
                     st.session_state.agent_start_time = datetime.now()  # 시작 시간 재설정
                     st.success(f"Agent가 {reboot_freq}회 작동 후 자동으로 재부팅되었습니다.")
+                    st.rerun()
             except ValueError:
                 st.error("재부팅 주기는 숫자로 입력해주세요.")
 
             work_frequency = st.text_input("Agent 작동 주기 (초)", value="10")
-            st.session_state.model_options = st.selectbox("LLM 모델 선택", ("claude 3 haiku", "claude 3.7 sonnet"))
+            st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o mini", "claude 3 haiku", "claude 3.7 sonnet"))
             toogle_col1, toogle_col2 = st.columns(2)
             with toogle_col1:
                 toggle_web_search = st.toggle("웹 검색 참조", value=True)

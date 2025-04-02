@@ -7,7 +7,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
 # import Sidebar
 from page.sidebar import show_sidebar
 
@@ -21,17 +20,12 @@ from page.api_setting import show_api_settings, init_api_session_state
 # import Model
 from model.api_anthropic import stream_anthropic_response
 
-
-
-
 # 세션 상태 초기화
 init_api_session_state()
 
 # 채팅 기록 초기화
 if 'messages' not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
-
-
 
 # 사이드바 표시
 with st.sidebar:
