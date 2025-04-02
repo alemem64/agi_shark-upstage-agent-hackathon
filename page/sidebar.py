@@ -71,7 +71,6 @@ def show_sidebar():
             full_prompt = user_prompt_text + document_text
             st.session_state.messages.append({"role": "user", "content": user_prompt_text})
 
-
             print(full_prompt)
             
             # 스트리밍 방식으로 응답 생성 및 표시
@@ -141,15 +140,10 @@ def show_sidebar():
                         response_placeholder.markdown(full_response)
                         print(f"예외 발생: {str(e)}")
                     
-
-    
-                    
                     # 응답 기록에 저장
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     with chat_settings_tab:
-
-
         with st.expander("Agent 상태", expanded=True):
             agent_status_col1, agent_status_col2 = st.columns(2)
             with agent_status_col1:
@@ -200,12 +194,8 @@ def show_sidebar():
             with toogle_col2:
                 toggle_always_see_doc = st.toggle("항시 참조 문서", value=True)
                 toggle_see_rag_doc = st.toggle("RAG 문서 참조", value=True)
-
-
-        with st.expander("투자 성향", expanded=True):
-
-            user_requirement = st.text_area("사용자 맞춤 지시", value="비트코인을 주로 투자하고 싶어")
-            st.session_state['user_requirement'] = user_requirement
+                
+        with st.expander("거래 설정", expanded=True):
             # 위험 성향 선택 시 세션 상태에 저장
             risk_style = st.select_slider(
                 "위험 성향",
@@ -221,6 +211,9 @@ def show_sidebar():
                 value="스윙",
             )
             st.session_state['trading_period'] = trading_period
+
+            user_requirement = st.text_area("기타 거래 조건", value="비트코인을 주로 투자하고 싶어")
+            st.session_state['user_requirement'] = user_requirement
 
         apply_chat_settings_button = st.button("설정 적용하기", use_container_width=True, type="primary")
         if apply_chat_settings_button:
