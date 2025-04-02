@@ -18,8 +18,18 @@ st.markdown("""
     <style>
     /* 불필요한 마진 줄이기 */
     .block-container {
-        padding-top: 1rem;
+        padding-top: 3rem;
         padding-bottom: 1rem;
+    }
+    
+    /* 상단 탭 버튼 스타일링 - 가시성 향상 */
+    .stButton > button[data-testid="baseButton-secondary"] {
+        background-color: #f0f2f6;
+        margin-top: 10px;
+    }
+    
+    .stButton > button[data-testid="baseButton-primary"] {
+        margin-top: 10px;
     }
     
     /* metrics 스타일 개선 */
@@ -197,6 +207,95 @@ st.markdown("""
     span[data-testid="stMarkdownContainer"] div {
         display: block !important;
         white-space: normal !important;
+    }
+
+    /* 전체 앱 컨테이너 스타일링 */
+    .main .block-container {
+        max-width: 1200px;
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+
+    /* 카드 컨테이너 스타일링 */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding-top: 1rem;
+    }
+
+    /* 거래내역 카드 컨테이너 */
+    .trade-cards-container {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+        padding: 15px;
+        height: auto;
+        max-height: 650px;
+        overflow-y: auto;
+        border-radius: 10px;
+        background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    /* 페이지네이션 스타일링 */
+    .pagination-controls {
+        margin-top: 1rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* 탭 스타일링 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 16px;
+        border-radius: 4px 4px 0 0;
+    }
+
+    /* 테이블 헤더 스타일링 */
+    .stDataFrame th {
+        font-weight: bold !important;
+        background-color: #f0f2f6 !important;
+    }
+
+    /* 필터 영역 스타일링 */
+    .filter-section {
+        background-color: #f7f7f7;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+
+    /* 상태 배지 스타일링 */
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    /* 버튼 스타일링 */
+    .stButton button {
+        border-radius: 20px;
+        padding: 4px 15px;
+        font-weight: 500;
+    }
+
+    /* 모바일 대응 */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            padding: 6px 10px;
+            font-size: 0.9rem;
+        }
+        
+        .trade-cards-container {
+            padding: 10px;
+            max-height: 500px;
+        }
     }
     </style>
 """, unsafe_allow_html=True)

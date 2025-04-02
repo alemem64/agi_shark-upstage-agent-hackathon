@@ -39,47 +39,65 @@ class Trade:
             self.upbit = None
             print(f"⚠️ 경고: 업비트 API 초기화 중 오류: {e}")
     
-    def get_order_history(self, market=None, state=None, page=1, limit=100):
-        """주문 내역 조회 (개선된 버전)"""
+    def get_order_history(self, ticker_or_uuid="", state=None, page=1, limit=100):
+        """주문 내역 조회 (개선된 버전)
+        
+        Args:
+            ticker_or_uuid (str): 티커명 또는 주문 UUID (빈 값: 전체 주문 조회)
+            state (str): 주문 상태 (wait, done, cancel)
+            page (int): 페이지 번호
+            limit (int): 요청 개수 (최대 100)
+            
+        Returns:
+            list: 주문 내역 목록
+        """
         if not self.is_valid or not self.upbit:
+            print("유효한 API 키가 설정되지 않았습니다.")
             return []
             
         try:
             # 1. pyupbit 라이브러리 사용 시도
             orders = []
-            market_param = market if market else ""
             
-            # 각 상태별로 조회
+            # 상태가 지정되지 않은 경우 모든 상태 조회
             states = [state] if state else ["wait", "done", "cancel"]
             
             for current_state in states:
                 try:
-                    result = self.upbit.get_order(market_param, state=current_state, limit=limit)
-                    if result:
-                        if isinstance(result, list):
-                            orders.extend(result)
-                        else:
-                            orders.append(result)
+                    # pyupbit.get_order 직접 호출
+                    result = self.upbit.get_order(ticker_or_uuid, state=current_state, limit=limit)
+                    
+                    if isinstance(result, list):
+                        orders.extend(result)
+                    elif isinstance(result, dict) and result:  # 딕셔너리이고 비어있지 않은 경우
+                        orders.append(result)
                 except Exception as e:
+                    print(f"{current_state} 상태 주문 조회 중 오류: {str(e)}")
                     continue
                     
             if orders:
                 return orders
                 
             # 2. 직접 API 호출 시도 (fallback)
-            return self._get_orders_direct_api(market, state, limit)
+            return self._get_orders_direct_api(ticker_or_uuid, state, limit)
             
         except Exception as e:
+            print(f"주문 내역 조회 중 오류: {str(e)}")
             # 3. 에러 발생 시 직접 API 호출 시도
-            return self._get_orders_direct_api(market, state, limit)
+            return self._get_orders_direct_api(ticker_or_uuid, state, limit)
     
-    def _get_orders_direct_api(self, market=None, state=None, limit=100):
+    def _get_orders_direct_api(self, ticker_or_uuid=None, state=None, limit=100):
         """직접 API를 호출하여 주문 내역 조회"""
         try:
             query = {'limit': limit}
             
-            if market:
-                query['market'] = market
+            # UUID인 경우와 티커인 경우 구분
+            if ticker_or_uuid:
+                if len(ticker_or_uuid) >= 30:  # UUID로 추정
+                    query['uuid'] = ticker_or_uuid
+                else:  # 티커로 추정
+                    query['market'] = ticker_or_uuid
+            
             if state:
                 query['state'] = state
                 
