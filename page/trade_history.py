@@ -40,132 +40,152 @@ def format_date(date_string: str) -> str:
 def get_order_history_from_trade(_upbit_trade) -> pd.DataFrame:
     """주문 내역 조회"""
     try:
-        # 최종 주문 내역 리스트
-        orders = []
-        
         # 실제 거래소에서 데이터 가져오기 시도
         if _upbit_trade:
+            real_orders = []
+            api_success = False
+            
             try:
-                # 방법 1: 전체 주문 내역 조회 시도
+                # 방법 1: 전체 주문 내역 조회 시도 (최근 100개)
                 all_orders = _upbit_trade.upbit.get_order("", state="done", limit=100)
+                
                 if all_orders:
+                    api_success = True
                     if isinstance(all_orders, list):
-                        orders.extend(all_orders)
+                        real_orders.extend(all_orders)
                     elif isinstance(all_orders, dict):
-                        orders.append(all_orders)
+                        real_orders.append(all_orders)
             except Exception as e:
+                print(f"전체 주문 내역 조회 실패: {str(e)}")
+                
                 # 방법 2: 주요 코인만 개별 조회 시도 (속도 향상)
                 try:
                     # 주요 코인만 조회 (모든 코인을 조회하면 속도가 느려짐)
-                    major_tickers = ["KRW-BTC", "KRW-ETH", "KRW-XRP", "KRW-SOL", "KRW-DOGE", "KRW-ADA"]
+                    major_tickers = ["KRW-BTC", "KRW-ETH", "KRW-XRP", "KRW-SOL", "KRW-DOGE", "KRW-ADA", "KRW-AVAX", "KRW-DOT", "KRW-MATIC"]
                     
                     for ticker in major_tickers:
                         try:
-                            # 해당 코인의 완료된 주문 내역 가져오기
-                            coin_orders = _upbit_trade.upbit.get_order(ticker, state="done")
+                            # 해당 코인의 완료된 주문 내역 가져오기 (최근 20개)
+                            coin_orders = _upbit_trade.upbit.get_order(ticker, state="done", limit=20)
+                            
                             if coin_orders:
+                                api_success = True
                                 if isinstance(coin_orders, list):
-                                    orders.extend(coin_orders)
+                                    real_orders.extend(coin_orders)
                                 elif isinstance(coin_orders, dict):
-                                    orders.append(coin_orders)
-                        except:
+                                    real_orders.append(coin_orders)
+                        except Exception as sub_e:
+                            print(f"{ticker} 주문 내역 조회 실패: {str(sub_e)}")
                             continue
                 except Exception as e:
-                    pass
+                    print(f"개별 코인 주문 내역 조회 실패: {str(e)}")
+            
+            # 실제 API에서 주문 데이터를 가져왔으면 처리
+            if api_success and real_orders:
+                # 주문 데이터 처리
+                processed_orders = []
+                for order in real_orders:
+                    try:
+                        # 필수 필드가 있는지 확인
+                        market = order.get('market', '')
+                        if not market:
+                            continue
+                            
+                        side = order.get('side', '')
+                        if not side:
+                            continue
+                            
+                        # 숫자 데이터 안전하게 변환
+                        try:
+                            price = float(order.get('price', 0))
+                            volume = float(order.get('volume', 0))
+                            executed_volume = float(order.get('executed_volume', 0)) if 'executed_volume' in order else volume
+                            paid_fee = float(order.get('paid_fee', 0))
+                        except (ValueError, TypeError):
+                            # 숫자 변환 실패 시 기본값 사용
+                            price = 0
+                            volume = 0
+                            executed_volume = 0
+                            paid_fee = 0
+                            
+                        created_at = order.get('created_at', '')
+                        state = order.get('state', 'done')
+                        
+                        # 유효한 데이터만 추가
+                        if price > 0 and (volume > 0 or executed_volume > 0):
+                            actual_volume = executed_volume if executed_volume > 0 else volume
+                            actual_amount = price * actual_volume
+                            
+                            processed_orders.append({
+                                "주문시간": format_datetime(created_at),
+                                "코인": market.replace("KRW-", ""),
+                                "주문유형": "매수" if side == 'bid' else "매도",
+                                "주문가격": price,
+                                "주문수량": actual_volume,
+                                "주문금액": actual_amount,
+                                "수수료": paid_fee,
+                                "상태": "완료" if state == 'done' else "대기" if state == 'wait' else "취소"
+                            })
+                    except Exception as e:
+                        print(f"주문 처리 중 오류: {str(e)}")
+                        continue
+                
+                # 유효한 주문이 있으면 실제 데이터 반환
+                if processed_orders:
+                    # 데이터프레임으로 변환
+                    df = pd.DataFrame(processed_orders)
+                    # 최신순 정렬
+                    return df.sort_values('주문시간', ascending=False)
+                else:
+                    # 주문 내역이 없는 경우 안내 메시지
+                    st.info("실제 거래 내역이 없습니다. 샘플 데이터를 표시합니다.")
         
         # API 키가 설정되지 않았거나 실제 주문이 없는 경우를 위한 샘플 데이터
-        if not orders:
-            # 더미 데이터 추가 (최근 10일간의 샘플 거래 내역)
-            today = datetime.now()
-            sample_coins = ["BTC", "ETH", "XRP", "DOGE", "ADA"]
-            
-            for i in range(20):  # 더 많은 데이터 포인트 생성 (페이징 테스트)
-                order_date = today - timedelta(days=i//2)
-                date_str = order_date.strftime("%Y-%m-%dT%H:%M:%S+00:00")
-                
-                # 매수 주문 추가
-                if i % 3 != 0:  # 일부 날짜만 매수 주문 추가
-                    coin = sample_coins[i % len(sample_coins)]
-                    price = 50000000 if coin == "BTC" else 3000000 if coin == "ETH" else 500
-                    volume = 0.001 if coin == "BTC" else 0.01 if coin == "ETH" else 100
-                    
-                    orders.append({
-                        'market': f'KRW-{coin}',
-                        'side': 'bid',
-                        'price': price,
-                        'volume': volume,
-                        'executed_volume': volume,
-                        'paid_fee': price * volume * 0.0005,
-                        'created_at': date_str,
-                        'state': 'done'
-                    })
-                
-                # 매도 주문 추가
-                if i % 4 != 0:  # 일부 날짜만 매도 주문 추가
-                    coin = sample_coins[(i+2) % len(sample_coins)]
-                    price = 51000000 if coin == "BTC" else 3100000 if coin == "ETH" else 520
-                    volume = 0.001 if coin == "BTC" else 0.01 if coin == "ETH" else 50
-                    
-                    orders.append({
-                        'market': f'KRW-{coin}',
-                        'side': 'ask',
-                        'price': price,
-                        'volume': volume,
-                        'executed_volume': volume,
-                        'paid_fee': price * volume * 0.0005,
-                        'created_at': date_str,
-                        'state': 'done'
-                    })
+        # 더미 데이터 추가 (최근 10일간의 샘플 거래 내역)
+        today = datetime.now()
+        sample_coins = ["BTC", "ETH", "XRP", "DOGE", "ADA"]
         
-        # 주문 데이터 처리
-        processed_orders = []
-        for order in orders:
-            try:
-                # 필수 필드가 있는지 확인
-                market = order.get('market', '')
-                if not market:
-                    continue
-                    
-                side = order.get('side', '')
-                if not side:
-                    continue
-                    
-                # 숫자 데이터 안전하게 변환
-                try:
-                    price = float(order.get('price', 0))
-                    volume = float(order.get('volume', 0))
-                    executed_volume = float(order.get('executed_volume', 0)) if 'executed_volume' in order else 0
-                    paid_fee = float(order.get('paid_fee', 0))
-                except (ValueError, TypeError):
-                    # 숫자 변환 실패 시 기본값 사용
-                    price = 0
-                    volume = 0
-                    executed_volume = 0
-                    paid_fee = 0
-                    
-                created_at = order.get('created_at', '')
-                state = order.get('state', 'done')
+        sample_orders = []
+        for i in range(20):  # 더 많은 데이터 포인트 생성 (페이징 테스트)
+            order_date = today - timedelta(days=i//2)
+            date_str = order_date.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            
+            # 매수 주문 추가
+            if i % 3 != 0:  # 일부 날짜만 매수 주문 추가
+                coin = sample_coins[i % len(sample_coins)]
+                price = 50000000 if coin == "BTC" else 3000000 if coin == "ETH" else 500
+                volume = 0.001 if coin == "BTC" else 0.01 if coin == "ETH" else 100
                 
-                # 유효한 데이터만 추가
-                if price > 0 and (volume > 0 or executed_volume > 0):
-                    actual_volume = executed_volume if executed_volume > 0 else volume
-                    actual_amount = price * actual_volume
-                    
-                    processed_orders.append({
-                        "주문시간": format_datetime(created_at),
-                        "코인": market.replace("KRW-", ""),
-                        "주문유형": "매수" if side == 'bid' else "매도",
-                        "주문가격": price,
-                        "주문수량": actual_volume,
-                        "주문금액": actual_amount,
-                        "수수료": paid_fee,
-                        "상태": "완료" if state == 'done' else "대기" if state == 'wait' else "취소"
-                    })
-            except Exception as e:
-                continue
+                sample_orders.append({
+                    "주문시간": format_datetime(date_str),
+                    "코인": coin,
+                    "주문유형": "매수",
+                    "주문가격": price,
+                    "주문수량": volume,
+                    "주문금액": price * volume,
+                    "수수료": price * volume * 0.0005,
+                    "상태": "완료"
+                })
+            
+            # 매도 주문 추가
+            if i % 4 != 0:  # 일부 날짜만 매도 주문 추가
+                coin = sample_coins[(i+2) % len(sample_coins)]
+                price = 51000000 if coin == "BTC" else 3100000 if coin == "ETH" else 520
+                volume = 0.001 if coin == "BTC" else 0.01 if coin == "ETH" else 50
+                
+                sample_orders.append({
+                    "주문시간": format_datetime(date_str),
+                    "코인": coin,
+                    "주문유형": "매도",
+                    "주문가격": price,
+                    "주문수량": volume,
+                    "주문금액": price * volume,
+                    "수수료": price * volume * 0.0005,
+                    "상태": "완료"
+                })
                 
         # 데이터프레임으로 변환
-        df = pd.DataFrame(processed_orders)
+        df = pd.DataFrame(sample_orders)
         
         # 데이터가 없으면 빈 데이터프레임 반환
         if df.empty:
@@ -176,6 +196,7 @@ def get_order_history_from_trade(_upbit_trade) -> pd.DataFrame:
         
     except Exception as e:
         # 오류 발생시 빈 데이터프레임 반환
+        st.error(f"거래 내역 조회 중 오류 발생: {str(e)}")
         return pd.DataFrame(columns=["주문시간", "코인", "주문유형", "주문가격", "주문수량", "주문금액", "수수료", "상태"])
 
 def format_datetime(dt_str):

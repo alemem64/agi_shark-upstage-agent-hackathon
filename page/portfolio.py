@@ -161,78 +161,103 @@ def get_portfolio_info_from_trade(_upbit_trade):
         if not _upbit_trade:
             # API 키가 없거나 인스턴스 생성 실패 시 샘플 데이터 반환
             return generate_sample_portfolio_data()
+        
+        # API 키가 설정되어 있고 인스턴스가 생성되었다면 실제 데이터로 로드 시도
+        try:
+            # KRW 잔고
+            krw_balance = _upbit_trade.get_balance("KRW")
             
-        # KRW 잔고
-        krw_balance = _upbit_trade.get_balance("KRW")
-        
-        # 코인 보유 내역
-        coin_balances = []
-        total_investment = 0
-        total_current_value = 0
-        
-        # 모든 KRW 마켓 티커 
-        tickers = pyupbit.get_tickers(fiat="KRW")
-        
-        # 모든 가격 한 번에 조회 (여러 API 호출 대신 한 번의 API 호출)
-        current_prices = pyupbit.get_current_price(tickers)
-        
-        for ticker in tickers:
-            coin_name = ticker.split('-')[1]
-            balance = _upbit_trade.get_balance(coin_name)
+            # 코인 보유 내역
+            coin_balances = []
+            total_investment = 0
+            total_current_value = 0
             
-            if balance > 0:
-                current_price = current_prices.get(ticker, 0)
+            # 실제 잔고 조회 시도
+            upbit_balances = _upbit_trade.upbit.get_balances()
+            
+            if upbit_balances and len(upbit_balances) > 0:
+                # 모든 KRW 마켓 티커와 현재가 조회
+                tickers = pyupbit.get_tickers(fiat="KRW")
+                current_prices = pyupbit.get_current_price(tickers)
                 
-                if current_price > 0:
-                    # 평균 매수가 조회
-                    try:
-                        # 계좌 정보에서 평균 매수가 가져오기 시도
-                        avg_buy_price = _upbit_trade.upbit.get_avg_buy_price(ticker)
-                    except:
-                        # API에서 지원하지 않는 경우 현재가로 대체
-                        avg_buy_price = current_price
+                # 잔고 정보 처리
+                for balance in upbit_balances:
+                    if balance['currency'] == 'KRW':
+                        continue  # KRW는 건너뜀
                     
-                    current_value = balance * current_price
-                    investment = balance * avg_buy_price
+                    coin_name = balance['currency']
+                    ticker = f"KRW-{coin_name}"
                     
-                    coin_balances.append({
-                        '코인': coin_name,
-                        '수량': balance,
-                        '평균매수가': avg_buy_price,
-                        '현재가': current_price,
-                        '평가금액': current_value,
-                        '투자금액': investment,
-                        '평가손익': current_value - investment,
-                        '수익률': ((current_price - avg_buy_price) / avg_buy_price) * 100 if avg_buy_price > 0 else 0
-                    })
-                    
-                    total_investment += investment
-                    total_current_value += current_value
-        
-        # 포트폴리오가 비어있으면 샘플 데이터 반환
-        if not coin_balances:
+                    if ticker in tickers:
+                        # 수량
+                        quantity = float(balance['balance'])
+                        
+                        if quantity > 0:
+                            # 평균 매수가
+                            avg_buy_price = float(balance['avg_buy_price'])
+                            
+                            # 현재가
+                            current_price = current_prices.get(ticker, 0)
+                            if current_price <= 0:
+                                current_price = _upbit_trade.get_current_price(ticker) or 0
+                            
+                            # 평가금액 및 손익 계산
+                            current_value = quantity * current_price
+                            investment = quantity * avg_buy_price
+                            
+                            # 수익률 계산
+                            profit_rate = 0
+                            if avg_buy_price > 0:
+                                profit_rate = ((current_price - avg_buy_price) / avg_buy_price) * 100
+                            
+                            # 코인 정보 추가
+                            coin_balances.append({
+                                '코인': coin_name,
+                                '수량': quantity,
+                                '평균매수가': avg_buy_price,
+                                '현재가': current_price,
+                                '평가금액': current_value,
+                                '투자금액': investment,
+                                '평가손익': current_value - investment,
+                                '수익률': profit_rate
+                            })
+                            
+                            # 총액 업데이트
+                            total_investment += investment
+                            total_current_value += current_value
+            
+            # 실제 보유 코인이 있을 경우만 계속 진행
+            if coin_balances:
+                # 일일 수익률 계산
+                daily_profit_rate = calculate_daily_profit_rate(_upbit_trade)
+                
+                # 포트폴리오 요약 정보
+                portfolio_summary = {
+                    '총보유자산': total_current_value + krw_balance,
+                    '총투자금액': total_investment,
+                    '총평가손익': total_current_value - total_investment,
+                    '총수익률': ((total_current_value - total_investment) / total_investment * 100) if total_investment > 0 else 0,
+                    '보유현금': krw_balance,
+                    '일평가수익률': daily_profit_rate,
+                    '코인평가금액': total_current_value  # 코인 평가금액 추가
+                }
+                
+                # 데이터프레임 생성
+                df = pd.DataFrame(coin_balances)
+                if not df.empty:
+                    df = df.sort_values('평가금액', ascending=False)
+                
+                # 실제 데이터 반환
+                return portfolio_summary, df
+            
+            # 실제 보유 코인이 없으면 샘플 데이터 반환
+            st.info("업비트 계정에 보유한 코인이 없습니다. 샘플 데이터를 표시합니다.")
             return generate_sample_portfolio_data()
-        
-        # 일일 수익률 계산
-        daily_profit_rate = calculate_daily_profit_rate(_upbit_trade)
-        
-        # 포트폴리오 요약 정보
-        portfolio_summary = {
-            '총보유자산': total_current_value + krw_balance,
-            '총투자금액': total_investment,
-            '총평가손익': total_current_value - total_investment,
-            '총수익률': ((total_current_value - total_investment) / total_investment * 100) if total_investment > 0 else 0,
-            '보유현금': krw_balance,
-            '일평가수익률': daily_profit_rate,
-            '코인평가금액': total_current_value  # 코인 평가금액 추가
-        }
-        
-        # 데이터프레임 생성
-        df = pd.DataFrame(coin_balances)
-        if not df.empty:
-            df = df.sort_values('평가금액', ascending=False)
-        
-        return portfolio_summary, df
+            
+        except Exception as e:
+            # API 호출 중 오류 발생 시 샘플 데이터로 대체
+            st.error(f"Upbit API에서 포트폴리오 정보를 가져오는 중 오류가 발생했습니다: {str(e)}")
+            return generate_sample_portfolio_data()
         
     except Exception as e:
         st.error(f"포트폴리오 정보 조회 오류: {str(e)}")
