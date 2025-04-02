@@ -22,23 +22,179 @@ st.markdown("""
     
     /* metrics 스타일 개선 */
     [data-testid="stMetricValue"] {
-        color: #FFFFFF !important;
+        color: #333333 !important;
         font-weight: bold;
-        background-color: rgba(0, 0, 0, 0.2);
+        background-color: rgba(255, 255, 255, 0.9);
         padding: 5px;
         border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
     [data-testid="stMetricLabel"] {
         font-weight: bold;
-        color: #FFFFFF !important;
+        color: #333333 !important;
     }
     
     [data-testid="stMetricDelta"] {
         font-weight: bold;
-        background-color: rgba(0, 0, 0, 0.1);
+        background-color: rgba(255, 255, 255, 0.8);
         padding: 2px 5px;
         border-radius: 3px;
+    }
+    
+    /* HTML 렌더링 개선 핵심 설정 */
+    .element-container div.markdown-text-container p {
+        margin-bottom: 0px;
+    }
+    
+    /* HTML 태그 직접 렌더링 처리 */
+    .stMarkdown {
+        display: block !important;
+    }
+    
+    .stMarkdown p, .stMarkdown div, .stMarkdown span, 
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, 
+    .stMarkdown h4, .stMarkdown h5, .stMarkdown h6,
+    .stMarkdown ul, .stMarkdown ol, .stMarkdown li,
+    .stMarkdown table, .stMarkdown tr, .stMarkdown td, .stMarkdown th {
+        display: block !important;
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+    
+    /* Markdown 내부 태그 특수 처리 */
+    .stMarkdown div p {
+        white-space: normal !important;
+        display: block !important;
+    }
+    
+    /* stMarkdown에서 HTML이 텍스트로 표시되는 문제 해결 */
+    div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stMarkdownContainer"] div,
+    div[data-testid="stMarkdownContainer"] span {
+        display: block !important;
+        white-space: normal !important;
+    }
+    
+    /* HTML 요소가 태그로 표시되지 않고 정상 렌더링되도록 함 */
+    div[data-testid="stMarkdownContainer"] > div > p {
+        overflow: visible !important;
+        white-space: normal !important;
+        display: block !important;
+    }
+    
+    /* 버튼 스타일 개선 - 텍스트 잘림 방지 */
+    .stButton > button {
+        min-height: 2.5rem;
+        overflow: visible !important;
+        white-space: normal !important;
+        height: auto !important;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        width: 100%;
+    }
+    
+    /* HTML 테이블 스타일 */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        display: table !important;
+    }
+    
+    th, td {
+        padding: 8px;
+        text-align: left;
+        display: table-cell !important;
+    }
+    
+    tr {
+        display: table-row !important;
+    }
+    
+    thead {
+        display: table-header-group !important;
+    }
+    
+    tbody {
+        display: table-row-group !important;
+    }
+    
+    thead tr {
+        border-bottom: 1px solid #ddd;
+    }
+    
+    /* 격자 스타일 컨테이너 */
+    .grid-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    
+    /* 데이터 컨테이너 스타일 - 가독성 향상 */
+    .data-container {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border: 1px solid #e6e6e6;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    /* 가격 정보 카드 스타일 - 가독성 향상 */
+    .price-card {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        border: 1px solid #e6e6e6;
+    }
+    
+    /* 차트 및 데이터 설명 레이블 */
+    .data-label {
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+        color: #444;
+    }
+    
+    .data-value {
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* 프로그레스 바 스타일 */
+    .progress-container {
+        height: 8px;
+        background-color: #f0f2f6;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        border-radius: 4px;
+    }
+    
+    /* HTML 이스케이프 특수 처리 - 모든 곳에 적용 */
+    div[data-testid="stMarkdownContainer"] > div.markdown-text-container > p {
+        display: block !important;
+    }
+    
+    /* 모든 HTML 요소 표시 강제 처리 */
+    div, span, p, h1, h2, h3, h4, h5, h6, ul, li, table, tr, td, th {
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+    
+    /* 추가 렌더링 문제 해결을 위한 스타일 */
+    .stMarkdownContainer, .element-container {
+        overflow: visible !important;
+    }
+    
+    /* Streamlit HTML 특수 처리 */
+    span[data-testid="stMarkdownContainer"] div {
+        display: block !important;
+        white-space: normal !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -66,7 +222,7 @@ with st.sidebar:
 if 'selected_tab' not in st.session_state:
     st.session_state.selected_tab = "거래소"
 
-# 탭 버튼 생성
+# 탭 버튼 생성 - 너비 조정으로 텍스트 잘림 방지
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("📊 거래소", use_container_width=True, 
