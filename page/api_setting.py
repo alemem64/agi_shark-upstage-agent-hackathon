@@ -66,11 +66,21 @@ def reset_api_warning():
 
 def save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key):
     """API 키를 세션 상태에 저장"""
+    # 기존 API 키와 새 API 키 비교
+    api_changed = (st.session_state.upbit_access_key != upbit_access_key or 
+                  st.session_state.upbit_secret_key != upbit_secret_key)
+    
+    # 세션 상태에 저장
     st.session_state.openai_key = openai_key
     st.session_state.anthropic_key = anthropic_key
     st.session_state.upbit_access_key = upbit_access_key
     st.session_state.upbit_secret_key = upbit_secret_key
     st.session_state.upstage_api_key = upstage_api_key
+    
+    # API 키가 변경되었으면 캐시 초기화 플래그 설정
+    if api_changed and upbit_access_key and upbit_secret_key:
+        st.session_state.refresh_data = True
+    
     st.success("API 키가 저장되었습니다!")
 
 def get_upbit_instance():
@@ -98,6 +108,30 @@ def get_upbit_trade_instance():
         return None
 
 def show_api_settings():
+    # 둥근 입력란을 위한 CSS 추가
+    st.markdown("""
+    <style>
+    div[data-baseweb="input"], div[data-baseweb="base-input"] {
+        border-radius: 8px !important;
+    }
+    input[type="password"] {
+        border-radius: 8px !important;
+    }
+    input[type="text"] {
+        border-radius: 8px !important;
+    }
+    .stTextInput > div {
+        border-radius: 8px !important;
+    }
+    .stTextInput > div > div {
+        border-radius: 8px !important;
+    }
+    .stButton > button {
+        border-radius: 8px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     st.title("API 설정")
     
     st.header("upstage")
@@ -117,7 +151,32 @@ def show_api_settings():
     
     if st.button("저장하기", type="primary"):
         save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key)
+        
         # API 키 테스트
         if upbit_access_key and upbit_secret_key:
             st.info("Upbit API 키를 테스트합니다...")
-            test_upbit_api(upbit_access_key, upbit_secret_key)
+            api_success = test_upbit_api(upbit_access_key, upbit_secret_key)
+            
+            # API 연동 성공 시 즉시 캐시 초기화
+            if api_success:
+                st.info("모든 데이터를 새로고침합니다...")
+                # 캐시 초기화
+                st.cache_data.clear()
+                # 연동 완료 상태 표시
+                st.success("API 연동이 완료되었습니다. 모든 페이지에서 실제 데이터가 표시됩니다.")
+                st.balloons()  # 축하 효과
+                
+                # 2초 후 다른 페이지로 이동하는 버튼 표시
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("거래소로 이동", type="primary"):
+                        st.session_state.selected_tab = "거래소"
+                        st.rerun()
+                with col2:
+                    if st.button("포트폴리오로 이동"):
+                        st.session_state.selected_tab = "포트폴리오"
+                        st.rerun()
+                with col3:
+                    if st.button("거래 내역으로 이동"):
+                        st.session_state.selected_tab = "거래 내역"
+                        st.rerun()

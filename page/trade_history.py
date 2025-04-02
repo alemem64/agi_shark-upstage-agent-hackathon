@@ -84,6 +84,10 @@ def get_order_history_from_trade(_upbit_trade) -> pd.DataFrame:
             if api_success and real_orders:
                 # 주문 데이터 처리
                 processed_orders = []
+                
+                # 디버깅을 위한 정보 출력
+                st.write(f"실제 주문 데이터 {len(real_orders)}개를 가져왔습니다.")
+                
                 for order in real_orders:
                     try:
                         # 필수 필드가 있는지 확인
@@ -134,6 +138,8 @@ def get_order_history_from_trade(_upbit_trade) -> pd.DataFrame:
                 if processed_orders:
                     # 데이터프레임으로 변환
                     df = pd.DataFrame(processed_orders)
+                    # 성공 메시지 표시
+                    st.success(f"실제 거래 내역 {len(processed_orders)}개를 불러왔습니다.")
                     # 최신순 정렬
                     return df.sort_values('주문시간', ascending=False)
                 else:

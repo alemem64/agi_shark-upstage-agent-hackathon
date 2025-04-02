@@ -654,18 +654,22 @@ def show_trade_market():
         
         # 변동률 열에 따라 색상 적용 (양수는 녹색, 음수는 빨간색)
         def highlight_change(val):
-            # 문자열에서 화살표를 제거하고 +/- 기호와 % 기호를 제거한 후 숫자로 변환
+            """변동률에 따라 색상 결정"""
             try:
-                # 화살표와 공백 제거 후 +/- 부호 포함된 숫자만 추출
-                num_str = val.replace('↑', '').replace('↓', '').strip()
-                # % 기호 제거
-                num_str = num_str.replace('%', '')
-                # 숫자로 변환
-                num_val = float(num_str)
-                color = '#28a745' if num_val >= 0 else '#dc3545'
+                # 문자열인 경우 숫자 추출
+                if isinstance(val, str):
+                    # % 기호 및 부호 제거
+                    cleaned_val = val.replace('%', '').replace('+', '')
+                    # 숫자로 변환
+                    num_val = float(cleaned_val)
+                    color = '#28a745' if num_val >= 0 else '#dc3545'
+                else:
+                    # 숫자인 경우 직접 비교
+                    color = '#28a745' if float(val) >= 0 else '#dc3545'
+                
                 return f'color: {color}; font-weight: bold'
             except:
-                # 변환 불가능한 경우 기본값 반환
+                # 변환 실패 시 기본 스타일 반환
                 return 'color: #212529'
         
         # 변동률 열에 화살표 추가 (이미 변환된 경우 건너뛰기)

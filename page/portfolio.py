@@ -400,11 +400,12 @@ def show_portfolio():
                     num_str = num_str.replace(',', '')
                     # 숫자로 변환
                     num_val = float(num_str)
+                    # 색상 결정
+                    color = '#28a745' if num_val >= 0 else '#dc3545'
                 else:
-                    num_val = val
-                    
-                # 색상 결정
-                color = '#28a745' if num_val >= 0 else '#dc3545'
+                    # 숫자 타입인 경우 직접 비교
+                    color = '#28a745' if float(val) >= 0 else '#dc3545'
+                
                 return f'color: {color}; font-weight: bold'
             except:
                 # 변환 불가능한 경우 기본값 반환
@@ -479,9 +480,6 @@ def show_portfolio():
                              delta=f"{profit_sign}{profit_rate:.2f}%",
                              delta_color="normal")
                 
-                # 수익률 프로그레스 바
-                st.caption("수익률 시각화")
-                st.progress(progress_value)
                 st.markdown("---")
     else:
         st.info("보유 중인 코인이 없습니다.")

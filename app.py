@@ -207,6 +207,12 @@ from page.trade_history import show_trade_history
 from page.api_setting import show_api_settings, init_api_session_state, reset_api_warning
 from model.api_anthropic import stream_anthropic_response
 
+# API 연동 성공 후 모든 캐시 초기화
+def refresh_all_data():
+    """모든 데이터 캐시를 초기화하고 앱을 재실행합니다."""
+    st.cache_data.clear()
+    st.rerun()
+
 # 세션 상태 초기화
 init_api_session_state()
 
@@ -249,10 +255,10 @@ with col4:
         reset_api_warning()
         st.rerun()
 
-# 선택된 탭에 따라 내용 표시
-st.markdown(f"## {st.session_state.selected_tab}")
 st.markdown("---")
 
+# 탭 내용 표시
+# 선택된 탭에 따라 해당 페이지 렌더링
 if st.session_state.selected_tab == "거래소":
     show_trade_market()
 elif st.session_state.selected_tab == "포트폴리오":
@@ -261,5 +267,12 @@ elif st.session_state.selected_tab == "거래 내역":
     show_trade_history()
 elif st.session_state.selected_tab == "API 설정":
     show_api_settings()
+
+# API 연동 성공 후 새로고침 수행 
+if 'refresh_data' in st.session_state and st.session_state.refresh_data:
+    # 새로고침 상태 초기화
+    st.session_state.refresh_data = False
+    # 캐시 초기화 및 앱 재실행
+    refresh_all_data()
 
     
