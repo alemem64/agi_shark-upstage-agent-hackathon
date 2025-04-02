@@ -1,4 +1,6 @@
 import streamlit as st
+import sys
+sys.path.append("tools/upbit")
 
 # 페이지 설정 최적화
 st.set_page_config(
@@ -204,7 +206,7 @@ from page.sidebar import show_sidebar
 from page.trade_market import show_trade_market
 from page.portfolio import show_portfolio
 from page.trade_history import show_trade_history
-from page.api_setting import show_api_settings, init_api_session_state, reset_api_warning
+from page.api_setting import show_api_settings, init_api_session_state, reset_api_warning, check_api_keys
 from model.api_anthropic import stream_anthropic_response
 
 # API 연동 성공 후 모든 캐시 초기화
