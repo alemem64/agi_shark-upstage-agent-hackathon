@@ -9,3 +9,4 @@ nest_asyncio
 pyupbit
 PyMuPDF
 Pillow
+python-docx
