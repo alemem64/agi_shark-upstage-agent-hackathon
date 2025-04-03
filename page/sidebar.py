@@ -3,48 +3,60 @@ import asyncio
 import uuid
 import threading
 import time
-from datetime import datetime
+import json
+import os
+from datetime import datetime, timedelta
 
 from model.open_ai_agent import stream_openai_response
 from tools.auto_trader.auto_trader import AutoTrader
 
 def show_sidebar():
     st.title("암호화폐 거래 AI Agent")
-    chat_tab, chat_settings_tab, auto_trader_tab = st.tabs(["채팅", "Agent 설정", "자동 거래"])
+    chat_tab, chat_settings_tab = st.tabs(["채팅", "Agent 설정"])
 
     # 세션 상태에 Agent 상태 변수 초기화
     if 'agent_run_count' not in st.session_state:
         st.session_state.agent_run_count = 0
-    
+
+    # Agent 활성화 상태 추가
+    if 'agent_active' not in st.session_state:
+        st.session_state.agent_active = False
+        
+    # agent_start_time 세션 상태 초기화 추가
     if 'agent_start_time' not in st.session_state:
         st.session_state.agent_start_time = None
-
+        
+    # 마지막 작업 실행 시간 세션 상태 추가
+    if 'last_work_time' not in st.session_state:
+        st.session_state.last_work_time = 0
+        
     # 세션 상태 초기화 부분에 conversation_id 추가
     if 'conversation_id' not in st.session_state:
         st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
-        
-    # 자동 거래 에이전트 초기화
-    if 'auto_trader' not in st.session_state:
-        st.session_state.auto_trader = None
     
-    if 'auto_trader_settings' not in st.session_state:
-        st.session_state.auto_trader_settings = {
-            'interval_minutes': 5,
-            'max_investment': 100000,
-            'max_trading_count': 3,
-            'target_coins': ["BTC", "ETH", "XRP", "SOL", "ADA"],
-            'risk_level': "중립적",
-            'model_options': "gpt-4o-mini"
-        }
-
-    # Agent 실행 시간 계산 함수
-    def calculate_runtime():
-        if st.session_state.agent_start_time:
-            current_time = datetime.now()
-            runtime = current_time - st.session_state.agent_start_time
-            minutes = int(runtime.total_seconds() // 60)
-            return f"{minutes}분"
-        return "0분"
+    # Agent 작업 시간 파일 경로
+    agent_time_file = "data/agent_work_time.json"
+    
+    # 디렉토리 확인 및 생성
+    os.makedirs("data", exist_ok=True)
+    
+    # 토글 버튼 클릭 핸들러 함수
+    def toggle_agent_state():
+        # 현재 상태 반전
+        new_active_state = not st.session_state.agent_active
+        st.session_state.agent_active = new_active_state
+        
+        if new_active_state:
+            # Agent 시작
+            st.session_state.agent_start_time = time.time()
+            st.session_state.last_work_time = 0
+        else:
+            # Agent 종료
+            st.session_state.agent_start_time = None
+            st.session_state.agent_run_count = 0
+            st.session_state.last_work_time = 0
+            st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
+            st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
 
     with chat_tab:
         chat_container = st.container(height=650, border=True)
@@ -138,7 +150,9 @@ def show_sidebar():
                         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     with chat_settings_tab:
-        with st.expander("Agent 상태", expanded=True):
+            
+        with st.expander("Agent 설정", expanded=True):
+
             agent_status_col1, agent_status_col2 = st.columns(2)
             with agent_status_col1:
                 st.markdown(
@@ -148,36 +162,85 @@ def show_sidebar():
                 """
                 )
             with agent_status_col2:
-                st.markdown(
+                # 실시간으로 업데이트되는 시간 표시
+                runtime_placeholder = st.empty()
+                if st.session_state.agent_start_time:
+                    elapsed_seconds = int(time.time() - st.session_state.agent_start_time)
+                    minutes, seconds = divmod(elapsed_seconds, 60)
+                    hours, minutes = divmod(minutes, 60)
+                    days, hours = divmod(hours, 24)
+                    
+                    # 필요한 단위만 표시
+                    time_parts = []
+                    if days > 0:
+                        time_parts.append(f"{days}일")
+                    if hours > 0 or days > 0:  # 일이 있으면 시간도 표시
+                        time_parts.append(f"{hours}시간")
+                    if minutes > 0 or hours > 0 or days > 0:  # 시간이 있으면 분도 표시
+                        time_parts.append(f"{minutes}분")
+                    if seconds > 0 or not time_parts:  # 항상 초는 표시 (다른 단위가 없으면)
+                        time_parts.append(f"{seconds}초")
+                        
+                    time_str = " ".join(time_parts)
+                else:
+                    time_str = "0초"
+                    
+                runtime_placeholder.markdown(
                 f"""
-                    Agent 작동 시간 :primary-background[**{calculate_runtime()}**]
+                    자동 거래 작동 시간 :primary-background[**{time_str}**]
                 """
                 )
 
-        with st.expander("Agent 설정", expanded=True):
-            reboot_button = st.button("Agent 재부팅", use_container_width=True)
-            # 수동 재부팅 버튼 처리
-            if reboot_button:
-                st.session_state.agent_run_count = 0
-                st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
-                st.session_state.agent_start_time = datetime.now()
-                # 대화 ID 초기화
-                st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
-                st.success("Agent가 재부팅되었습니다.")
+            # 토글 버튼 텍스트 설정
+            button_text = "자동 거래 Agent 종료" if st.session_state.agent_active else "자동 거래 Agent 시작"
+            
+            # 콜백 방식으로 버튼 생성 
+            toggle_button = st.button(
+                button_text, 
+                on_click=toggle_agent_state,
+                use_container_width=True
+            )
+            
+            # 버튼 클릭 후 성공 메시지 표시
+            if toggle_button:
+                message = "자동 거래 Agent가 종료되었습니다." if not st.session_state.agent_active else "자동 거래 Agent가 시작되었습니다."
+                st.success(message)
                 st.rerun()
-            reboot_frequency = st.text_input("Agent 재부팅 주기 (작동 횟수)", value="10")
+            
+            agent_settings_col1, agent_settings_col2 = st.columns(2)
+            with agent_settings_col1:
+                reboot_frequency = st.text_input("Agent 재부팅 주기 (작동 횟수)", value="10")
+            with agent_settings_col2:
+                work_frequency = st.text_input("Agent 작동 주기 (초)", value="10")
 
             # 재부팅 주기 체크 및 LLM 초기화
             try:
                 reboot_freq = int(reboot_frequency)
-                if st.session_state.agent_run_count >= reboot_freq:
+                if st.session_state.agent_run_count >= reboot_freq and st.session_state.agent_active:
                     st.session_state.agent_run_count = 0  # 카운터 초기화
                     st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]  # 채팅 기록 초기화
-                    st.session_state.agent_start_time = datetime.now()  # 시작 시간 재설정
+                    st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"  # 대화 ID 초기화
                     st.success(f"Agent가 {reboot_freq}회 작동 후 자동으로 재부팅되었습니다.")
                     st.rerun()
             except ValueError:
                 st.error("재부팅 주기는 숫자로 입력해주세요.")
+
+            # 주기적 작업 실행 (Agent가 활성화된 경우)
+            if st.session_state.agent_active:
+                try:
+                    # 작업 주기 가져오기
+                    work_freq = int(work_frequency)
+                    current_time = time.time()
+                    elapsed_time = int(current_time - st.session_state.agent_start_time)
+                    
+                    # 주기에 맞춰 작업 실행
+                    if elapsed_time > 0 and elapsed_time % work_freq == 0 and st.session_state.last_work_time != elapsed_time:
+                        st.balloons()  # 풍선 효과 표시
+                        st.success(f"자동 거래 Agent가 {work_freq}초마다 작업을 수행합니다! 현재 경과 시간: {time_str}")
+                        st.session_state.last_work_time = elapsed_time
+                        st.rerun()
+                except (ValueError, TypeError):
+                    pass
 
             st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o", "gpt 4o mini"))
 
@@ -198,203 +261,8 @@ def show_sidebar():
         # 설정 적용 버튼
         if st.button("설정 적용하기", use_container_width=True, type="primary", key="apply_settings"):
             st.success("설정이 적용되었습니다.")
-            
-    with auto_trader_tab:
-        # 자동 거래 설정
-        st.header("자동 거래 설정")
-        
-        # 작동 주기 설정
-        auto_trader_col1, auto_trader_col2, auto_trader_col3 = st.columns(3)
-        
-        with auto_trader_col1:
-            interval_minutes = st.text_input(
-                "분석 간격 (분)", 
-                value=str(st.session_state.auto_trader_settings['interval_minutes']),
-                key="interval_minutes_setting"
-            )
-            
-        with auto_trader_col2:
-            max_trading_count = st.text_input(
-                "일일 최대 거래 횟수", 
-                value=str(st.session_state.auto_trader_settings['max_trading_count']),
-                key="max_trading_count_setting"
-            )
-            
-        with auto_trader_col3:
-            max_investment = st.text_input(
-                "최대 투자 금액 (원)", 
-                value=str(st.session_state.auto_trader_settings['max_investment']),
-                key="max_investment_setting"
-            )
-        
-        # 자동 거래 시작/중지 버튼
-        auto_trader_control_col1, auto_trader_control_col2 = st.columns(2)
-        
-        with auto_trader_control_col1:
-            if st.button("자동 거래 시작", key="start_auto_trader", use_container_width=True, 
-                        disabled=(st.session_state.auto_trader is not None and st.session_state.auto_trader.is_running)):
-                try:
-                    interval_minutes_val = int(interval_minutes)
-                    max_investment_val = int(max_investment)
-                    max_trading_count_val = int(max_trading_count)
-                    
-                    # 설정 저장
-                    st.session_state.auto_trader_settings.update({
-                        'interval_minutes': interval_minutes_val,
-                        'max_investment': max_investment_val,
-                        'max_trading_count': max_trading_count_val,
-                        'risk_level': risk_style
-                    })
-                    
-                    # 자동 거래 에이전트 생성 및 시작
-                    if 'upbit_access_key' not in st.session_state or not st.session_state.upbit_access_key:
-                        st.error("Upbit API 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요.")
-                    elif 'upbit_secret_key' not in st.session_state or not st.session_state.upbit_secret_key:
-                        st.error("Upbit Secret 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요.")
-                    elif 'openai_key' not in st.session_state or not st.session_state.openai_key:
-                        st.error("OpenAI API 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요.")
-                    else:
-                        # 자동 거래 에이전트 생성
-                        if st.session_state.auto_trader is None:
-                            st.session_state.auto_trader = AutoTrader(
-                                access_key=st.session_state.upbit_access_key,
-                                secret_key=st.session_state.upbit_secret_key,
-                                model_options=st.session_state.model_options,
-                                interval_minutes=interval_minutes_val,
-                                max_investment=max_investment_val,
-                                max_trading_count=max_trading_count_val
-                            )
-                            
-                            # 거래 기록을 채팅창에 전송하는 콜백 함수 설정
-                            def trade_callback(trade_info):
-                                action = "매수" if trade_info.get("action") == "buy" else "매도"
-                                timestamp = trade_info.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                                ticker = trade_info.get("ticker", "")
-                                amount = trade_info.get("amount", "")
-                                reason = trade_info.get("reason", "")
-                                
-                                trade_message = f"""
-                                ## 자동 거래 알림
-                                - 시간: {timestamp}
-                                - 행동: {action}
-                                - 코인: {ticker}
-                                - 금액/수량: {amount}
-                                - 이유: {reason}
-                                """
-                                
-                                # 메시지에 추가
-                                st.session_state.messages.append({"role": "assistant", "content": trade_message})
-                            
-                            # 자동 거래 에이전트에 콜백 등록
-                            st.session_state.auto_trader.set_trade_callback(trade_callback)
-                            
-                        # 자동 거래 에이전트 시작
-                        success = st.session_state.auto_trader.start()
-                        if success:
-                            st.success("자동 거래가 시작되었습니다!")
-                            
-                            # 시스템 메시지를 채팅창에 추가
-                            system_message = f"""
-                            ## 자동 거래 시작
-                            자동 거래 에이전트가 시작되었습니다.
-                            
-                            ### 설정 정보
-                            - 분석 간격: {interval_minutes_val}분
-                            - 일일 최대 거래 횟수: {max_trading_count_val}회
-                            - 최대 투자 금액: {max_investment_val:,}원
-                            - 위험 성향: {risk_style}
-                            
-                            에이전트는 {interval_minutes_val}분 간격으로 시장을 분석하고 자동으로 매수/매도를 진행합니다.
-                            거래 내역은 이 채팅창에 표시됩니다.
-                            """
-                            
-                            st.session_state.messages.append({"role": "assistant", "content": system_message})
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error("자동 거래 시작에 실패했습니다.")
-                except ValueError:
-                    st.error("입력값이 올바르지 않습니다. 숫자만 입력해주세요.")
-                
-        with auto_trader_control_col2:
-            if st.button("자동 거래 중지", key="stop_auto_trader", use_container_width=True,
-                        disabled=(st.session_state.auto_trader is None or not st.session_state.auto_trader.is_running)):
-                if st.session_state.auto_trader:
-                    success = st.session_state.auto_trader.stop()
-                    if success:
-                        st.success("자동 거래가 중지되었습니다!")
-                        
-                        # 시스템 메시지를 채팅창에 추가
-                        system_message = """
-                        ## 자동 거래 중지
-                        자동 거래 에이전트가 중지되었습니다.
-                        """
-                        
-                        st.session_state.messages.append({"role": "assistant", "content": system_message})
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("자동 거래 중지에 실패했습니다.")
-        
-        # 자동 거래 상태 표시
-        if st.session_state.auto_trader:
-            status_info = st.session_state.auto_trader.get_status()
-            
-            st.subheader("자동 거래 상태")
-            
-            status_col1, status_col2, status_col3 = st.columns(3)
-            
-            with status_col1:
-                st.metric(
-                    "상태", 
-                    status_info["status"], 
-                    delta="실행 중" if status_info["is_running"] else "중지됨",
-                    delta_color="normal" if status_info["is_running"] else "off"
-                )
-            
-            with status_col2:
-                next_check = "준비 중..." 
-                time_until = ""
-                if status_info["next_check"]:
-                    next_check = status_info["next_check"]
-                    # n분 후 표시 추가
-                    try:
-                        next_time = datetime.strptime(status_info["next_check"], "%Y-%m-%d %H:%M:%S")
-                        now = datetime.now()
-                        if next_time > now:
-                            minutes_left = (next_time - now).total_seconds() // 60
-                            time_until = f"{int(minutes_left)}분 후"
-                    except:
-                        pass
-                st.metric("다음 분석 시간", next_check, delta=time_until if time_until else None)
-            
-            with status_col3:
-                st.metric(
-                    "일일 거래 횟수", 
-                    f"{status_info['daily_trading_count']} / {status_info['max_trading_count']}"
-                )
-            
-            # 진행 바 (다음 분석까지 남은 시간)
-            if status_info["is_running"] and status_info["next_check"]:
-                try:
-                    next_time = datetime.strptime(status_info["next_check"], "%Y-%m-%d %H:%M:%S")
-                    now = datetime.now()
-                    
-                    if next_time > now:
-                        total_seconds = status_info["interval_minutes"] * 60
-                        elapsed = total_seconds - (next_time - now).total_seconds()
-                        progress = min(1.0, max(0.0, elapsed / total_seconds))
-                        
-                        st.progress(progress)
-                    else:
-                        st.progress(1.0)
-                except:
-                    st.progress(0.0)
-            else:
-                st.progress(0.0)
-        else:
-            st.info("자동 거래 에이전트가 초기화되지 않았습니다. 설정을 구성하고 '자동 거래 시작' 버튼을 눌러주세요.")
-        
 
-
-        
+    # 자동 갱신
+    if st.session_state.agent_active:
+        time.sleep(1)
+        st.rerun()

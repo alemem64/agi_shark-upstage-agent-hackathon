@@ -14,7 +14,6 @@ st.set_page_config(
 )
 
 
-
 # 필요한 모듈 가져오기
 from page.sidebar import show_sidebar
 from page.trade_market import show_trade_market
