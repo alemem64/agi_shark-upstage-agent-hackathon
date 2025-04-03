@@ -111,26 +111,43 @@ def show_api_settings():
     # 둥근 입력란을 위한 CSS 추가
     st.markdown("""
     <style>
-    /* 기존 스타일 */
-    div[data-baseweb="input"] > div, /* 기본 인풋 컨테이너 */
-    div[data-baseweb="base-input"] > div { /* 베이스 인풋 컨테이너 */
+    /* 입력 필드 컨테이너 */
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"] {
+        /* border-radius와 기본적인 border 스타일은 유지 */
         border-radius: 8px !important;
-        border: 1px solid #ccc !important; /* 테두리 추가 */
-        transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* 부드러운 효과 */
-    }
-    /* 포커스 시 테두리 강조 */
-    div[data-baseweb="input"] > div:focus-within,
-    div[data-baseweb="base-input"] > div:focus-within {
-        border-color: #007bff !important; /* 포커스 색상 */
-        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25) !important; /* 포커스 시 그림자 효과 */
+        border: 1px solid #ccc !important;
+        transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        /* 내부 input과의 간격을 위해 패딩 조정 */
+        padding: 1px !important; /* 컨테이너 패딩 최소화 */
     }
 
-    /* Streamlit의 기본 스타일 오버라이드를 위해 좀 더 구체적으로 지정 */
-    .stTextInput > div > div > input[type="text"],
-    .stTextInput > div > div > input[type="password"] {
-        border-radius: 8px !important; /* 내부 input에도 적용 */
-        border: none !important; /* 내부 input 자체 테두리는 제거 (컨테이너 테두리 사용) */
-        padding: 8px 10px !important; /* 내부 패딩 조정 */
+    /* 포커스 시 컨테이너 스타일 */
+    div[data-baseweb="input"]:focus-within,
+    div[data-baseweb="base-input"]:focus-within {
+        border-color: #007bff !important;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25) !important;
+    }
+
+    /* 내부 input 요소 */
+    .stTextInput input[type="text"],
+    .stTextInput input[type="password"] {
+        border: none !important; /* 내부 input의 기본 테두리 제거 */
+        border-radius: 7px !important; /* 컨테이너보다 약간 작게 */
+        padding: 8px 10px !important; /* 내부 패딩 */
+        /* 배경색 등을 투명하게 하여 컨테이너 배경이 보이도록 할 수도 있음 */
+        background-color: transparent !important;
+        box-shadow: none !important; /* 내부 그림자 제거 */
+        outline: none !important; /* 포커스 시 기본 외곽선 제거 */
+        width: 100%; /* 너비 채우기 */
+        box-sizing: border-box; /* 패딩 포함 너비 계산 */
+    }
+
+    /* Streamlit의 특정 구조 타겟팅 강화 (필요시) */
+    div[data-testid="stTextInput"] > div > div {
+        /* 이 요소에 직접적인 border나 padding은 피함 */
+        border: none !important;
+        padding: 0 !important;
     }
 
     .stButton > button {
