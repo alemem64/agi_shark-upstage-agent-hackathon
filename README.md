@@ -27,7 +27,7 @@
 
 ### 권장 환경 (개발 버전)
 
-- Python 3.12.7 (anaconda)
+- Python 3.11.11
 
 ### 필요 API
 - upstage API Key (Document Parser, Information Extracter)
@@ -53,3 +53,17 @@
    ```bash
    streamlit run app.py
    ```
+
+### 문제 해결
+
+1. numpy/pandas 설치 오류 시:
+   ```bash
+   pip uninstall numpy pandas
+   pip install numpy>=1.26.0 pandas>=2.1.0
+   ```
+
+2. M1/M2 Mac 사용자:
+   ```bash
+   pip install --upgrade pip wheel setuptools
+   ```
+   를 먼저 실행 후 설치를 진행해주세요.
