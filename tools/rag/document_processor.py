@@ -12,7 +12,7 @@ def update_upstage_api_key():
     _UPSTAGE_API_KEY = st.session_state.get('upstage_api_key', '')
     print(f"Document processor - Upstage API 키 업데이트: {'설정됨' if _UPSTAGE_API_KEY else '없음'}")
 
-def process_file(file_path: str, file_name: str = None) -> dict:
+def process_file(file_path: str, file_name: str = None, vector_store_id: str = None) -> dict:
     """문서 파일을 처리하여 파싱하고 벡터 스토어에 업로드"""
     if file_name is None:
         file_name = os.path.basename(file_path)
@@ -43,8 +43,10 @@ def process_file(file_path: str, file_name: str = None) -> dict:
                             'source': 'rag_storage',
                             'file_name': file_name,
                             'original_path': file_path,
-                            'parse_method': 'upstage'
-                        }
+                            'parse_method': 'upstage',
+                            'vector_store_id': vector_store_id
+                        },
+                        vector_store_id=vector_store_id
                     )
                     
                     if upload_success:
@@ -64,31 +66,42 @@ def process_file(file_path: str, file_name: str = None) -> dict:
         
         # Upstage 파싱 실패 또는 API 키가 없는 경우 직접 파일 업로드
         print(f"파일 직접 업로드 시작 (Upstage 파싱 없이)")
-        upload_success = upload_file_to_vector_store(
-            file_path=file_path,
-            file_name=file_name,
-            attributes={
-                'source': 'rag_storage',
-                'file_name': file_name,
-                'original_path': file_path,
-                'parse_method': 'direct'
-            }
-        )
-        
-        if upload_success:
-            print(f"파일 '{file_name}' 벡터 스토어 직접 업로드 성공")
-            return {
-                'success': True,
-                'vector_store_upload': True,
-                'text': f"파일 '{file_name}'이 벡터 스토어에 직접 업로드되었습니다.",
-                'metadata': {
+        try:
+            upload_result, error_message = upload_file_to_vector_store(
+                file_path=file_path,
+                file_name=file_name,
+                attributes={
+                    'source': 'rag_storage',
                     'file_name': file_name,
-                    'parse_method': 'direct'
+                    'original_path': file_path,
+                    'parse_method': 'direct',
+                    'vector_store_id': vector_store_id
+                },
+                vector_store_id=vector_store_id
+            )
+            
+            if upload_result:
+                print(f"파일 '{file_name}' 벡터 스토어 직접 업로드 성공")
+                return {
+                    'success': True,
+                    'vector_store_upload': True,
+                    'text': f"파일 '{file_name}'이 벡터 스토어에 직접 업로드되었습니다.",
+                    'metadata': {
+                        'file_name': file_name,
+                        'parse_method': 'direct'
+                    }
                 }
-            }
-        else:
-            error_msg = "벡터 스토어 업로드 실패"
-            print(f"파일 '{file_name}' 벡터 스토어 업로드 실패")
+            else:
+                error_msg = f"벡터 스토어 업로드 실패: {error_message or '알 수 없는 이유'}"
+                print(f"파일 '{file_name}' {error_msg}")
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'vector_store_upload': False
+                }
+        except Exception as e:
+            error_msg = f"벡터 스토어 업로드 처리 중 오류 발생: {str(e)}"
+            print(f"파일 '{file_name}' {error_msg}")
             return {
                 'success': False,
                 'error': error_msg,
@@ -120,10 +133,22 @@ def process_all_rag_documents():
     
     print(f"RAG 저장소에서 {len(pdf_files)}개의 PDF 파일 처리 시작")
     
+    # 다른 파일과 세션 상태가 초기화되기 전에 필요한 값을 미리 저장
+    from tools.rag.rag import update_global_cache
+    update_global_cache()
+    
+    # 세션 상태에서 벡터 스토어 ID 가져오기
+    vector_store_id = ""
+    try:
+        vector_store_id = st.session_state.get('vector_store_id', '')
+        print(f"process_all_rag_documents: vector_store_id = {vector_store_id}")
+    except Exception as e:
+        print(f"세션 상태 접근 오류(무시됨): {str(e)}")
+    
     for pdf_file in pdf_files:
         file_path = os.path.join(rag_storage_path, pdf_file)
-        # 비동기적으로 처리
-        async_process(process_file, file_path, pdf_file)
+        # 비동기적으로 처리하면서 벡터 스토어 ID 직접 전달
+        async_process(process_file, file_path, pdf_file, vector_store_id=vector_store_id)
     
     return True
 
@@ -137,4 +162,8 @@ def process_uploaded_file(file_path: str, file_name: str = None):
     update_upstage_api_key()
     update_upstage_api_key()  # Document processor에도 API 키 업데이트
     
-    return async_process(process_file, file_path, file_name)
+    # 세션 상태에서 벡터 스토어 ID 가져오기
+    vector_store_id = st.session_state.get('vector_store_id', '')
+    
+    # 벡터 스토어 ID를 직접 전달
+    return async_process(process_file, file_path, file_name, vector_store_id=vector_store_id)

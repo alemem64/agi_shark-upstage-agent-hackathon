@@ -4,17 +4,17 @@ from agents import function_tool, RunContextWrapper
 from tools.rag.rag import search_vector_store, get_openai_client
 
 @function_tool
-async def search_documents(ctx: RunContextWrapper[Any], query: str, max_results: int = 3) -> str:
+async def search_rag_documents(ctx: RunContextWrapper[Any], query: str, max_results: int = None) -> str:
     """문서 데이터베이스에서 질문과 관련된 정보를 검색합니다.
     
     Args:
         query: 검색할 질문 또는 키워드
-        max_results: 반환할 최대 결과 수 (기본값: 3)
+        max_results: 반환할 최대 결과 수
     
     Returns:
         검색 결과의 텍스트 내용
     """
-    print(f"문서 검색 도구 호출됨: '{query}' (최대 결과: {max_results}개)")
+    print(f"문서 검색 도구 호출됨: '{query}' (최대 결과: {max_results or 3}개)")
     
     # vector_store_id가 세션에 없으면 오류 반환
     if 'vector_store_id' not in st.session_state:
@@ -30,6 +30,10 @@ async def search_documents(ctx: RunContextWrapper[Any], query: str, max_results:
         return error_msg
     
     try:
+        # 기본값 설정 (함수 매개변수 대신 여기서 처리)
+        if max_results is None:
+            max_results = 3
+        
         # 벡터 스토어에서 검색 수행
         results = search_vector_store(query, max_results)
         

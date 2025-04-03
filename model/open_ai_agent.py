@@ -14,6 +14,7 @@ from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool, FunctionTool
 from tools.document_parser.document_parser import DocumentParser
 from tools.information_extract.informaton_extract import information_extract
+from tools.rag.agent_tools import search_rag_documents
 
 # UpbitTrader를 직접 가져옵니다
 try:
@@ -136,6 +137,8 @@ def get_model_name(model_options):
         return "gpt-4o-mini"
     elif model_options == "gpt 4o":
         return "gpt-4o"
+    elif model_options == "o3 mini":
+        return "o3-mini"
 
 # 도구 함수 구현
 async def get_available_coins_func(ctx, args=None):
@@ -1078,7 +1081,7 @@ def create_agent(model_options):
         사용 가능한 참조 문서 목록: {", ".join(pdf_files_base)}
         """,
         model=get_model_name(model_options),
-        tools=[WebSearchTool(search_context_size="high"), parse_document_tool, extract_information_tool],
+        tools=[WebSearchTool(search_context_size="high"), parse_document_tool, extract_information_tool, search_rag_documents],
     )
     
     return agent

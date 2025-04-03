@@ -179,7 +179,7 @@ def show_sidebar():
             except ValueError:
                 st.error("재부팅 주기는 숫자로 입력해주세요.")
 
-            st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o mini", "claude 3 haiku", "claude 3.7 sonnet"))
+            st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o", "gpt 4o mini"))
 
 
         with st.expander("사용자 요구사항", expanded=True):

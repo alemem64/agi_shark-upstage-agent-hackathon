@@ -64,8 +64,6 @@ def init_api_session_state():
     stored_keys = load_api_keys()
     
     # 세션 상태 초기화 및 저장된 키 적용
-    if 'anthropic_key' not in st.session_state:
-        st.session_state.anthropic_key = stored_keys.get('anthropic_key', "")
     if 'openai_key' not in st.session_state:
         st.session_state.openai_key = stored_keys.get('openai_key', "")
     if 'upbit_access_key' not in st.session_state:
@@ -104,7 +102,7 @@ def reset_api_warning():
     """탭 변경 시 API 경고 메시지 초기화 (각 탭에서 한 번씩만 표시)"""
     st.session_state.api_warning_shown = False
 
-def save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token):
+def save_api_keys(openai_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token):
     """API 키를 세션 상태와 파일에 저장"""
     # 세션 상태에 저장
     # 기존 API 키와 새 API 키 비교
@@ -113,7 +111,6 @@ def save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key,
     
     # 세션 상태에 저장
     st.session_state.openai_key = openai_key
-    st.session_state.anthropic_key = anthropic_key
     st.session_state.upbit_access_key = upbit_access_key
     st.session_state.upbit_secret_key = upbit_secret_key
     st.session_state.upstage_api_key = upstage_api_key
@@ -122,7 +119,6 @@ def save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key,
     # 파일에 저장
     api_keys = {
         'openai_key': openai_key,
-        'anthropic_key': anthropic_key,
         'upbit_access_key': upbit_access_key,
         'upbit_secret_key': upbit_secret_key,
         'upstage_api_key': upstage_api_key,
@@ -180,7 +176,6 @@ def show_api_settings():
 
     st.header("LLM")
     openai_key = st.text_input("OpenAI API 키 (필수)", value=st.session_state.openai_key, type="password")
-    anthropic_key = st.text_input("Anthropic API 키 (선택)", value=st.session_state.anthropic_key, type="password")
     st.divider()
 
     st.header("Upbit")
@@ -192,7 +187,7 @@ def show_api_settings():
     X_bearer_token = st.text_input("X bearer API 키 (선택)", value=st.session_state.X_bearer_token, type="password")
 
     if st.button("저장하기", type="primary"):
-        save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token)
+        save_api_keys(openai_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token)
         
         # API 키 테스트
         if upbit_access_key and upbit_secret_key:

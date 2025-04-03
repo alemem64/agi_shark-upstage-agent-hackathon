@@ -115,17 +115,18 @@ def create_vector_store() -> Optional[str]:
         print(f"벡터 스토어 생성 오류: {str(e)}")
         return None
 
-def upload_to_vector_store(text_content: str, file_name: str, attributes: Dict = None, openai_api_key=None) -> bool:
-    """파싱된 텍스트 콘텐츠를 벡터 스토어에 업로드"""
-    if 'vector_store_id' not in st.session_state:
-        print("벡터 스토어가 초기화되지 않았습니다.")
-        return False
+def upload_to_vector_store(text_content: str, file_name: str, attributes: Dict = None, 
+                          openai_api_key=None, vector_store_id=None) -> bool:
+    # session_state 접근 전에 전달받은 vector_store_id 사용
+    if vector_store_id is None:
+        if 'vector_store_id' not in st.session_state:
+            print("벡터 스토어가 초기화되지 않았습니다.")
+            return False
+        vector_store_id = st.session_state.vector_store_id
     
     client = get_openai_client()
     if not client:
         return False
-    
-    vector_store_id = st.session_state.vector_store_id
     
     try:
         # 임시 파일 생성
@@ -150,33 +151,55 @@ def upload_to_vector_store(text_content: str, file_name: str, attributes: Dict =
         print(f"벡터 스토어 업로드 오류: {str(e)}")
         return False
 
-def upload_file_to_vector_store(file_path: str, file_name: str, attributes: Dict = None, openai_api_key=None) -> bool:
+def upload_file_to_vector_store(file_path: str, file_name: str, attributes: Dict = None, 
+                               openai_api_key=None, vector_store_id=None) -> tuple:
     """파일을 직접 벡터 스토어에 업로드"""
-    if 'vector_store_id' not in st.session_state:
-        print("벡터 스토어가 초기화되지 않았습니다.")
-        return False
+    global _VECTOR_STORE_ID
+    
+    actual_vector_store_id = vector_store_id or _VECTOR_STORE_ID
+    
+    print(f"upload_file_to_vector_store 실행: ID={actual_vector_store_id}, 파일={file_name}")
+    
+    if not actual_vector_store_id:
+        try:
+            if 'vector_store_id' in st.session_state:
+                actual_vector_store_id = st.session_state.vector_store_id
+                print(f"세션에서 vector_store_id 가져옴: {actual_vector_store_id}")
+            else:
+                return False, "벡터 스토어 ID를 찾을 수 없습니다"
+        except Exception as e:
+            print(f"세션 상태 접근 오류: {str(e)}")
+            return False, f"세션 상태 접근 오류: {str(e)}"
     
     client = get_openai_client()
     if not client:
-        return False
-    
-    vector_store_id = st.session_state.vector_store_id
+        return False, "OpenAI 클라이언트를 초기화할 수 없습니다"
     
     try:
-        # 파일 직접 업로드
+        # 파일 직접 업로드 - 'attributes' 인자 제거
         with open(file_path, "rb") as f:
-            print(f"파일 '{file_name}' 벡터 스토어에 직접 업로드 시작...")
-            upload_result = client.vector_stores.files.upload_and_poll(
-                vector_store_id=vector_store_id,
-                file=f,
-                attributes=attributes or {}
+            print(f"파일 '{file_name}' 벡터 스토어({actual_vector_store_id})에 직접 업로드 시작...")
+            # 먼저 파일 업로드
+            file_upload = client.vector_stores.files.upload(
+                vector_store_id=actual_vector_store_id,
+                file=f
+            )
+            
+            # 속성 설정은 별도로 필요하다면 여기에 추가
+            # attributes가 있으면 나중에 파일 메타데이터에 설정할 수 있음
+            
+            # 업로드 상태 확인
+            file_status = client.vector_stores.files.retrieve(
+                vector_store_id=actual_vector_store_id,
+                file_id=file_upload.id
             )
         
-        print(f"파일 '{file_name}' 직접 업로드 완료: {upload_result.id}")
-        return True
+        print(f"파일 '{file_name}' 직접 업로드 완료: {file_upload.id}")
+        return True, None
     except Exception as e:
-        print(f"벡터 스토어 직접 업로드 오류: {str(e)}")
-        return False
+        error_msg = f"벡터 스토어 직접 업로드 오류: {str(e)}"
+        print(error_msg)
+        return False, error_msg
 
 def search_vector_store(query: str, max_results: int = 5) -> List[Dict]:
     """벡터 스토어에서 검색 수행"""
