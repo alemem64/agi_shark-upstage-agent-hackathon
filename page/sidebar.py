@@ -53,6 +53,14 @@ def show_sidebar():
     if 'conversation_id' not in st.session_state:
         st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
     
+    # 세션 상태에 Agent 상태 변수 초기화 부분에 다음 추가
+    if 'messages' not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
+
+        # 세션 상태에 reboot_frequency 값 추가
+    if 'reboot_frequency' not in st.session_state:
+        st.session_state.reboot_frequency = "50"  # 기본값
+    
     # Agent 작업 시간 파일 경로
     agent_time_file = "data/agent_work_time.json"
     
@@ -132,6 +140,19 @@ def show_sidebar():
         
             if user_prompt:
                 st.session_state.agent_run_count += 1
+                
+                # 카운트 증가 후 바로 재부팅 조건 검사
+                try:
+                    reboot_freq = int(st.session_state.reboot_frequency)
+                    if st.session_state.agent_run_count >= reboot_freq and st.session_state.agent_active:
+                        st.session_state.agent_run_count = 0
+                        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
+                        st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"
+                        st.success(f"Agent가 {reboot_freq}회 작동 후 자동으로 재부팅되었습니다.")
+                        st.rerun()
+                except ValueError:
+                    pass
+                
                 user_prompt_text = user_prompt
                 st.session_state.messages.append({"role": "user", "content": user_prompt_text})
                 
@@ -229,7 +250,7 @@ def show_sidebar():
             
             agent_settings_col1, agent_settings_col2 = st.columns(2)
             with agent_settings_col1:
-                reboot_frequency = st.text_input("Agent 재부팅 주기 (작동 횟수)", value="50")
+                reboot_frequency = st.text_input("Agent 재부팅 주기 (작동 횟수)", value=st.session_state.reboot_frequency)
             with agent_settings_col2:
                 work_frequency = st.text_input("Agent 작동 주기 (초)", value="60")
 
@@ -268,6 +289,18 @@ def show_sidebar():
                         
                         # 에이전트 실행 횟수 증가
                         st.session_state.agent_run_count += 1
+                        
+                        # 카운트 증가 후 바로 재부팅 조건 검사
+                        try:
+                            reboot_freq = int(reboot_frequency)
+                            if st.session_state.agent_run_count >= reboot_freq and st.session_state.agent_active:
+                                st.session_state.agent_run_count = 0  # 카운터 초기화
+                                st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]  # 채팅 기록 초기화
+                                st.session_state.conversation_id = f"conversation_{uuid.uuid4()}"  # 대화 ID 초기화
+                                st.success(f"Agent가 {reboot_freq}회 작동 후 자동으로 재부팅되었습니다.")
+                                st.rerun()
+                        except ValueError:
+                            pass
                         
                         # 채팅 기록에 사용자 메시지 추가 (올바른 역할로 수정)
                         st.session_state.messages.append({"role": "user", "content": auto_message})
