@@ -117,16 +117,11 @@ def show_sidebar():
                         full_response = f"오류 발생: {str(e)}"
                         response_placeholder.markdown(full_response)
                         print(f"예외 발생: {str(e)}")
-                    
 
-    
-                    
                     # 응답 기록에 저장
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     with chat_settings_tab:
-
-
         with st.expander("Agent 상태", expanded=True):
             agent_status_col1, agent_status_col2 = st.columns(2)
             with agent_status_col1:
