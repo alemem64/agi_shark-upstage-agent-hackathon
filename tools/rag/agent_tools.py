@@ -1,6 +1,6 @@
 import streamlit as st
 from typing import Dict, List, Any
-from agents import function_tool, RunContextWrapper
+from model.agents import function_tool, RunContextWrapper
 from tools.rag.rag import search_vector_store, get_openai_client
 
 @function_tool
