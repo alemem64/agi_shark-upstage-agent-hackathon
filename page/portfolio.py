@@ -266,7 +266,7 @@ def get_portfolio_info_from_trade(_upbit_trade):
 
 def show_portfolio():
     """포트폴리오 표시"""
-    # 이미 app.py에서 타이틀을 추가하므로 여기서는 제거
+    st.title("📂 포트폴리오")
     
     # API 키 확인
     has_api_keys = check_api_keys()
@@ -275,7 +275,7 @@ def show_portfolio():
     upbit_trade = get_upbit_trade_instance()
     
     # 새로고침 버튼
-    if st.button("🔄 새로고침", key="portfolio_refresh"):
+    if st.button("🔄 새로고침", key="portfolio_refresh", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
@@ -283,20 +283,19 @@ def show_portfolio():
     portfolio_summary, coin_balances = get_portfolio_info_from_trade(upbit_trade)
     
     # 포트폴리오 요약 정보 설명 추가
-    portfolio_summary_html = """
-    ### 💼 포트폴리오 요약
-    <div class="data-container">
-        <div class="data-label">포트폴리오 지표 설명</div>
-        <ul style="margin-top: 5px; padding-left: 20px;">
-            <li><strong>총 보유자산</strong>: 현금과 코인 평가금액을 합한 총 자산</li>
-            <li><strong>총 평가손익</strong>: 코인 투자로 인한 현재 수익/손실 금액</li>
-            <li><strong>일평가수익률</strong>: 24시간 동안의 포트폴리오 수익률</li>
-            <li><strong>보유 현금</strong>: 투자에 사용 가능한 현금 잔액</li>
-            <li><strong>코인 평가금액</strong>: 보유 중인 모든 코인의 현재 가치</li>
-            <li><strong>총 투자금액</strong>: 코인 구매에 사용한 총 금액</li>
-        </ul>
-    </div>
-    """
+    with st.expander("포트폴리오 지표 설명"):
+        portfolio_summary_html = """
+        <div class="data-container">
+            <ul style="margin-top: 5px; padding-left: 20px;">
+                <li><strong>총 보유자산</strong>: 현금과 코인 평가금액을 합한 총 자산</li>
+                <li><strong>총 평가손익</strong>: 코인 투자로 인한 현재 수익/손실 금액</li>
+                <li><strong>일평가수익률</strong>: 24시간 동안의 포트폴리오 수익률</li>
+                <li><strong>보유 현금</strong>: 투자에 사용 가능한 현금 잔액</li>
+                <li><strong>코인 평가금액</strong>: 보유 중인 모든 코인의 현재 가치</li>
+                <li><strong>총 투자금액</strong>: 코인 구매에 사용한 총 금액</li>
+            </ul>
+        </div>
+        """
     st.write(portfolio_summary_html, unsafe_allow_html=True)
     
     if not has_api_keys:

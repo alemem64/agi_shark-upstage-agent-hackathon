@@ -113,7 +113,7 @@ def display_pdf_section(title, storage_dir):
                         st.rerun()
 
 def show_trade_strategy():
-    st.title("투자 전략")
+    st.title("✨ AI 투자 전략")
     
     # 저장 디렉토리 설정
     pdf_storage = "tools/web2pdf/always_see_doc_storage"

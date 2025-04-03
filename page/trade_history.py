@@ -345,7 +345,7 @@ def generate_sample_order_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 def show_trade_history():
     """체결 내역 화면 표시 (취소 주문 중 일부 체결 포함)"""
-    st.title("💰 나의 체결 내역")
+    st.title("📝 거래 내역")
     
     # API 키 확인
     has_api_keys = check_api_keys()
@@ -354,9 +354,9 @@ def show_trade_history():
     upbit_trade = get_upbit_trade_instance()
     
     # 새로고침 버튼과 표시 옵션
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        if st.button("🔄 새로고침", key="history_refresh"):
+        if st.button("🔄 새로고침", key="history_refresh", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
     

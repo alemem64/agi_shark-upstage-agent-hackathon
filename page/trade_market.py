@@ -612,7 +612,7 @@ def show_coin_details(_upbit_trade, coin_ticker: str):
 
 def show_trade_market():
     """거래소 화면 표시"""
-    st.title("📊 실시간 거래소")
+    st.title("📊 거래소")
     
     # API 키 확인 (경고 메시지만 표시하고 계속 진행)
     has_api_keys = check_api_keys()
