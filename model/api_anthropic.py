@@ -1,6 +1,5 @@
 from anthropic import Anthropic
 import streamlit as st
-from model.X_agent import X_Agent
 
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":

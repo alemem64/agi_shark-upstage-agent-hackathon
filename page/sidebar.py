@@ -55,7 +55,7 @@ def show_sidebar():
             # 파일이 업로드된 경우 문서 분석 수행
             document_text = ""
             if user_prompt_file:
-                parser = DocumentParserAgent()
+                parser = DocumentParser()
                 result = parser.parse_document(user_prompt_file.getvalue(), user_prompt_file.name)
                 
                 if result['success']:
