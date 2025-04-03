@@ -164,7 +164,7 @@ def show_sidebar():
                 st.error("재부팅 주기는 숫자로 입력해주세요.")
 
             work_frequency = st.text_input("Agent 작동 주기 (초)", value="10")
-            st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o mini", "claude 3 haiku", "claude 3.7 sonnet"))
+            st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o", "gpt 4o mini", "claude 3 haiku", "claude 3.7 sonnet"))
             toogle_col1, toogle_col2 = st.columns(2)
             with toogle_col1:
                 toggle_web_search = st.toggle("웹 검색 참조", value=True)

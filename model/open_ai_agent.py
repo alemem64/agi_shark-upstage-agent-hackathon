@@ -133,6 +133,8 @@ def get_model_name(model_options):
         return "claude-3-haiku-20240307"
     elif model_options == "gpt 4o mini":
         return "gpt-4o-mini"
+    elif model_options == "gpt 4o":
+        return "gpt-4o"
 
 # 도구 함수 구현
 async def get_available_coins_func(ctx, args=None):
