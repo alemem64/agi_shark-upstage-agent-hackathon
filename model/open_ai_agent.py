@@ -10,6 +10,7 @@ import traceback
 from typing import Dict, List, Optional, Any
 import threading
 from datetime import datetime as dt, timedelta
+import pyupbit
 
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool, FunctionTool
@@ -209,6 +210,10 @@ async def get_coin_price_info_func(ctx, args):
 
 async def buy_coin_func(ctx, args):
     log_info(f"buy_coin 함수 호출", {"args": args})
+    
+    # 채팅 요청 여부 확인 (ctx에 invoked_by_chat 속성이 없으므로 기본값 False로 설정)
+    is_chat_request = getattr(ctx, 'invoked_by_chat', False)
+    
     if isinstance(args, str):
         try:
             args = json.loads(args)
@@ -224,7 +229,7 @@ async def buy_coin_func(ctx, args):
         ticker = f"KRW-{ticker}"
     upbit = get_upbit_instance()
     if not upbit:
-        return json.dumps({"success": False, "message": "Upbit API 오류"}, ensure_ascii=False)
+        return json.dumps({"success": False, "message": "Upbit API 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요."}, ensure_ascii=False)
     if price_type not in ["market", "limit"]:
         return json.dumps({"success": False, "message": f"잘못된 주문 유형: {price_type}"}, ensure_ascii=False)
     if amount <= 0:
@@ -248,10 +253,16 @@ async def buy_coin_func(ctx, args):
                 "amount": amount,
                 "price_type": price_type,
                 "limit_price": limit_price,
-                "result": order_result
+                "result": order_result,
+                "from_chat": is_chat_request
             }
-            if 'auto_trader' in st.session_state:
+            
+            # 채팅 요청이면 로그만 남기고, 자동 거래 요청이면 auto_trader에 알림
+            if is_chat_request:
+                log_info(f"채팅 매수 요청 성공: {ticker} {amount}원", trade_info)
+            elif 'auto_trader' in st.session_state:
                 st.session_state.auto_trader.notify_trade(trade_info)
+            
             return json.dumps({"success": True, "message": f"{ticker} {price_type} 매수 접수", "order_id": order_result['uuid'], "order_info": order_result}, ensure_ascii=False)
         return json.dumps({"success": False, "message": "주문 ID 수신 실패"}, ensure_ascii=False)
     except Exception as e:
@@ -260,6 +271,10 @@ async def buy_coin_func(ctx, args):
 
 async def sell_coin_func(ctx, args):
     log_info(f"sell_coin 함수 호출", {"args": args})
+    
+    # 채팅 요청 여부 확인 (ctx에 invoked_by_chat 속성이 없으므로 기본값 False로 설정)
+    is_chat_request = getattr(ctx, 'invoked_by_chat', False)
+    
     if isinstance(args, str):
         try:
             args = json.loads(args)
@@ -275,7 +290,7 @@ async def sell_coin_func(ctx, args):
         ticker = f"KRW-{ticker}"
     upbit = get_upbit_instance()
     if not upbit:
-        return json.dumps({"success": False, "message": "Upbit API 오류"}, ensure_ascii=False)
+        return json.dumps({"success": False, "message": "Upbit API 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요."}, ensure_ascii=False)
     if price_type not in ["market", "limit"]:
         return json.dumps({"success": False, "message": f"잘못된 주문 유형: {price_type}"}, ensure_ascii=False)
     coin_currency = ticker.replace("KRW-", "")
@@ -308,10 +323,16 @@ async def sell_coin_func(ctx, args):
                 "amount": amount_value,
                 "price_type": price_type,
                 "limit_price": limit_price,
-                "result": order_result
+                "result": order_result,
+                "from_chat": is_chat_request
             }
-            if 'auto_trader' in st.session_state:
+            
+            # 채팅 요청이면 로그만 남기고, 자동 거래 요청이면 auto_trader에 알림
+            if is_chat_request:
+                log_info(f"채팅 매도 요청 성공: {ticker} {amount_value} 개", trade_info)
+            elif 'auto_trader' in st.session_state:
                 st.session_state.auto_trader.notify_trade(trade_info)
+            
             return json.dumps({"success": True, "message": f"{ticker} {price_type} 매도 접수", "order_id": order_result['uuid'], "order_info": order_result}, ensure_ascii=False)
         return json.dumps({"success": False, "message": "주문 ID 수신 실패"}, ensure_ascii=False)
     except Exception as e:
@@ -465,6 +486,8 @@ class AutoTrader:
         """
         
         try:
+            # 이 요청은 자동 거래 시스템의 요청이므로 자동 거래 플래그 설정
+            self.status = "거래 결정 중"
             result = await Runner.run(
                 agent,
                 input=prompt,
@@ -559,12 +582,20 @@ class AutoTrader:
         }
 
     def notify_trade(self, trade_info):
-        self.trading_history.append(trade_info)
-        self.daily_trading_count += 1
+        # 채팅 요청인 경우 거래 기록만 추가하고 거래 횟수는 증가시키지 않음
+        if trade_info.get('from_chat', False):
+            self.trading_history.append(trade_info)
+            self.log(f"채팅 거래 기록: {trade_info.get('timestamp')} {trade_info.get('action')} {trade_info.get('ticker')}", "INFO")
+        else:
+            # 자동 거래인 경우 거래 기록 추가 및 거래 횟수 증가
+            self.trading_history.append(trade_info)
+            self.daily_trading_count += 1
+            self.log(f"자동 거래 기록: {trade_info.get('timestamp')} {trade_info.get('action')} {trade_info.get('ticker')}", "INFO")
+        
+        # 알림 콜백 호출
         if self.trade_callback:
             try:
                 self.trade_callback(trade_info)
-                self.log(f"거래 알림: {trade_info.get('timestamp')} {trade_info.get('action')} {trade_info.get('ticker')}", "INFO")
             except Exception as e:
                 self.log(f"알림 오류: {str(e)}", "ERROR")
 
@@ -611,35 +642,54 @@ def create_agent(model_options):
         else:
             auto_trader_info += "상태: 중지됨\n'자동 거래' 탭에서 시작 가능\n"
 
-    # 도구 목록 준비 - FunctionTool로 래핑
+    # 도구 목록 준비
     tools = []
     try:
+        # 기본 도구 추가
         tools = [
             WebSearchTool(search_context_size="high"),
-            FunctionTool.from_defaults(fn=get_available_coins_func),
-            FunctionTool.from_defaults(fn=get_coin_price_info_func),
-            FunctionTool.from_defaults(fn=buy_coin_func),
-            FunctionTool.from_defaults(fn=sell_coin_func),
-            FunctionTool.from_defaults(fn=check_order_status_func)
+            function_tool(get_available_coins_func),
+            function_tool(get_coin_price_info_func),
+            function_tool(buy_coin_func),
+            function_tool(sell_coin_func),
+            function_tool(check_order_status_func)
         ]
         
-        # 문서 파서 및 정보 추출 도구 추가
-        document_parser = DocumentParser()
-        if document_parser:
-            tools.append(FunctionTool.from_defaults(fn=document_parser, name="document_parser"))
-            
-        # 정보 추출 도구 추가
-        tools.append(FunctionTool.from_defaults(fn=information_extract, name="information_extract"))
+        # DocumentParser 도구 추가
+        async def document_parser_tool(ctx, args):
+            try:
+                parser = DocumentParser()
+                # parse 메서드가 있다고 가정 (실제 메서드 이름에 맞게 수정 필요)
+                result = parser.parse(args)
+                return json.dumps({"success": True, "result": result}, ensure_ascii=False)
+            except Exception as e:
+                log_error(e, "문서 파싱 오류")
+                return json.dumps({"success": False, "message": str(e)}, ensure_ascii=False)
+        
+        tools.append(function_tool(document_parser_tool))
+        
+        # information_extract 도구 추가 (비동기 처리 가정)
+        async def information_extract_tool(ctx, args):
+            try:
+                result = information_extract(args)  # 기존 함수 호출
+                return json.dumps({"success": True, "result": result}, ensure_ascii=False)
+            except Exception as e:
+                log_error(e, "정보 추출 오류")
+                return json.dumps({"success": False, "message": str(e)}, ensure_ascii=False)
+        
+        tools.append(function_tool(information_extract_tool))
+        
+        log_info("도구 생성 완료", {"tool_count": len(tools)})
     except Exception as e:
         log_error(e, "도구 생성 오류")
-        # 최소한의 도구로 시도
-        tools = []
+        # 기본 도구만 사용
+        tools = [WebSearchTool(search_context_size="high")]
 
     try:
         agent = Agent(
             name="Crypto Trading Assistant",
             instructions=f"""
-            암호화폐 거래를 위한 AI 어시스턴트입니다. 사용자의 투자 성향과 요구사항을 고려하며, 자동 거래를 실행할 수 있습니다.
+            암호화폐 거래를 위한 AI 어시스턴트입니다. 사용자의 투자 성향과 요구사항을 고려하며, 거래를 도와드립니다.
             
             {context}
             
@@ -651,12 +701,28 @@ def create_agent(model_options):
 
             사용 가능한 문서: {', '.join(pdf_files_base)}
             
-            # 자동 거래 지침
+            # 중요: 거래 시스템 안내
+            이 시스템에는 두 가지 별개의 거래 방식이 있습니다:
+            
+            1. **채팅을 통한 직접 거래** - 사용자가 채팅으로 매수/매도를 요청하면 즉시 처리합니다.
+               - 자동 거래 시스템이 켜져 있는지 여부와 관계없이 항상 사용 가능합니다.
+               - 자동 거래 시스템의 일일 거래 제한에 영향을 주지 않습니다.
+               - 매수/매도는 즉시 처리되며, 자동 거래 시스템이 "분석 중"이어도 실행됩니다.
+            
+            2. **자동 거래 시스템** - 설정된 시간 간격으로 자동 분석 및 거래를 수행합니다.
+               - '자동 거래' 탭에서 시작/중지할 수 있습니다.
+               - 일일 거래 횟수에 제한이 있습니다.
+            
+            채팅을 통한 매수/매도 요청은 자동 거래 시스템을 켜지 않아도 항상 가능합니다. 두 시스템은 완전히 분리되어 있습니다.
+            
+            # 사용 가능한 도구
             - get_available_coins_func: 거래 가능 코인 조회
             - get_coin_price_info_func: 코인 가격 정보 조회
-            - buy_coin_func: 코인 매수
-            - sell_coin_func: 코인 매도
-            - 최대 투자 금액과 일일 거래 횟수를 준수하며 거래를 실행하세요.
+            - buy_coin_func: 코인 매수 (자동 거래 시스템 상태와 무관하게 항상 사용 가능)
+            - sell_coin_func: 코인 매도 (자동 거래 시스템 상태와 무관하게 항상 사용 가능)
+            - check_order_status_func: 주문 상태 확인
+            - document_parser_tool: 문서 파싱 도구
+            - information_extract_tool: 정보 추출 도구
             """,
             model=get_model_name(model_options),
             tools=tools
@@ -701,7 +767,7 @@ async def stream_openai_response(prompt, model_options, conversation_id=None):
     run_config = RunConfig(
         workflow_name="Crypto Trading Assistant",
         group_id=conversation_id
-    ) if conversation_id else None
+    ) if conversation_id else RunConfig(extra_context={"invoked_by_chat": True})
     
     full_prompt = f"{prompt}{auto_trader_info}"
     
@@ -709,7 +775,7 @@ async def stream_openai_response(prompt, model_options, conversation_id=None):
         agent,
         input=full_prompt,
         run_config=run_config
-    ) if run_config else Runner.run_streamed(agent, input=full_prompt)
+    )
     
     async for event in result.stream_events():
         if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
