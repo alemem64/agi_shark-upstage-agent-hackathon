@@ -76,6 +76,9 @@ class AutoTrader:
         self.trading_thread = None
         self.stop_event = threading.Event()
         
+        # 콜백 함수
+        self.trade_callback = None
+        
     def log(self, message, level="INFO"):
         """로그 메시지 기록"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -164,6 +167,10 @@ class AutoTrader:
                 self.daily_trading_count += 1
                 
                 self.log(f"매수 주문 완료: {ticker}, 주문ID: {result['uuid']}", "INFO")
+                
+                # 거래 알림 전송
+                self.notify_trade(trade_record)
+                
                 return {
                     "success": True,
                     "message": f"{ticker} 매수 주문이 접수되었습니다.",
@@ -265,11 +272,17 @@ class AutoTrader:
                 self.daily_trading_count += 1
                 
                 self.log(f"매도 주문 완료: {ticker}, 주문ID: {result['uuid']}", "INFO")
-                return {
-                    "success": True,
-                    "message": f"{ticker} 매도 주문이 접수되었습니다.",
-                    "order_id": result['uuid']
+                
+                # 거래 알림 전송
+                self.notify_trade(trade_record)
+                
+                result = {
+                    'success': True,
+                    'message': f"{ticker} {volume if volume else '전량'} 매도 주문이 접수되었습니다. 주문 ID: {result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
+                    'order_id': result['uuid'],
+                    'order_info': result
                 }
+                return json.dumps(result, ensure_ascii=False)
             else:
                 self.log(f"매도 주문 실패: {ticker}", "ERROR")
                 return {
@@ -609,4 +622,18 @@ class AutoTrader:
             self.max_trading_count = max_trading_count
             self.log(f"일일 최대 거래 횟수가 {max_trading_count}회로 설정되었습니다.", "INFO")
             
-        return True 
+        return True
+
+    def set_trade_callback(self, callback_func):
+        """거래 발생 시 호출할 콜백 함수 설정"""
+        self.trade_callback = callback_func
+        self.log(f"거래 콜백 함수가 설정되었습니다.", "INFO")
+        
+    def notify_trade(self, trade_info):
+        """거래 발생 시 콜백 함수 호출"""
+        if self.trade_callback:
+            try:
+                self.trade_callback(trade_info)
+                self.log(f"거래 알림이 전송되었습니다: {trade_info.get('timestamp')} {trade_info.get('action')} {trade_info.get('ticker')}", "INFO")
+            except Exception as e:
+                self.log(f"거래 알림 전송 중 오류 발생: {str(e)}", "ERROR") 
