@@ -10,7 +10,7 @@ import pandas as pd
 
 # 필요한 모듈 임포트
 from agents import Agent, Runner, set_default_openai_key, RunConfig, function_tool
-from model.open_ai_agent import get_model_name, buy_coin_func, sell_coin_func
+from tools.upbit.upbit_api import buy_coin_func, sell_coin_func
 from tools.upbit.UPBIT import Trade
 
 class AutoTrader:
