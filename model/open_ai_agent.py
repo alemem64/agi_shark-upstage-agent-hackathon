@@ -1,5 +1,6 @@
 import streamlit as st
 import asyncio
+import os
 
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig
@@ -28,7 +29,9 @@ def create_agent(model_options):
     user_requirement = st.session_state.get('user_requirement', '')
     risk_style = st.session_state.get('risk_style', '중립적')
     trading_period = st.session_state.get('trading_period', '스윙')
-    
+
+    pdf_files = [f for f in os.listdir("tools/web2pdf/always_see_doc_storage") if f.endswith('.pdf')]
+    print(pdf_files)
     # 이전 메시지 가져오기
     previous_messages = st.session_state.get('messages', [])
     context = ""
@@ -42,7 +45,7 @@ def create_agent(model_options):
             elif msg["role"] == "assistant":
                 context += f"AI: {msg['content']}\n"
         context += "\n"
-    
+
     # Agent 생성
     agent = Agent(
         name="Crypto Trading Assistant",
@@ -55,6 +58,8 @@ def create_agent(model_options):
         사용자 맞춤 지시: {user_requirement}
         위험 성향: {risk_style}
         거래 기간: {trading_period}
+
+        참조 문서: {pdf_files}
         """,
         model=get_model_name(model_options),
         tools=[],

@@ -4,7 +4,6 @@ import uuid
 
 from model.open_ai_agent import stream_openai_response
 from datetime import datetime
-from tools.document_parser.document_parser import DocumentParser
 
 def show_sidebar():
     st.title("암호화폐 거래 AI Agent")
@@ -50,29 +49,7 @@ def show_sidebar():
         if user_prompt:
             st.session_state.agent_run_count += 1
             user_prompt_text = user_prompt.text if user_prompt.text else ""
-            user_prompt_file = user_prompt.get("files", [None])[0] if user_prompt.get("files") else None
-            
-            # 파일이 업로드된 경우 문서 분석 수행
-            document_text = ""
-            if user_prompt_file:
-                parser = DocumentParser()
-                result = parser.parse_document(user_prompt_file.getvalue(), user_prompt_file.name)
-                
-                if result['success']:
-                    document_text = f"\n\n참고 문서 내용:\n{result['text']}"
-                    st.session_state.messages.append({
-                        "role": "system",
-                        "content": f"사용자가 업로드한 문서 '{result['metadata']['file_name']}'의 내용입니다: {document_text}"
-                    })
-                else:
-                    st.error(f"문서 분석 실패: {result['error']}")
-            
-            # 사용자 메시지와 문서 내용을 합쳐서 전달
-            full_prompt = user_prompt_text + document_text
             st.session_state.messages.append({"role": "user", "content": user_prompt_text})
-
-
-            print(full_prompt)
             
             # 스트리밍 방식으로 응답 생성 및 표시
             with chat_container:
@@ -84,7 +61,7 @@ def show_sidebar():
                     # 스트리밍 응답 처리
                     # 이벤트 루프 생성 및 관리 방식 변경
                     full_response = ""
-                    sent_data = f"입력: {full_prompt[:50]}..., 모델: {st.session_state.model_options}"
+                    sent_data = f"입력: {user_prompt_text[:50]}..., 모델: {st.session_state.model_options}"
                     print(f"요청 데이터: {sent_data}")
 
                     try:
