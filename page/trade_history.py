@@ -38,19 +38,17 @@ st.markdown("""
         border-left: 4px solid #4b4bff;
     }
     .transaction-card {
-        background-color: rgba(240, 255, 240, 0.3);
+        /* background-color: rgba(240, 255, 240, 0.3); */ /* 파이썬 코드에서 직접 지정하므로 주석 처리 또는 삭제 */
         border-left: 4px solid #4bff4b;
         padding: 15px;
         border-radius: 15px;
-        margin-bottom: 15px;
+        margin-bottom: 25px;
         border: 1px solid #ddd;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         transition: transform 0.2s;
     }
-    .transaction-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-    }
+    /* 짝수 번째 카드 CSS 선택자 제거 (파이썬에서 처리) */
+    /* .transaction-card:nth-child(even) { ... } */
     .status-done {
         color: #4bff4b;
         font-weight: bold;
@@ -365,7 +363,7 @@ def show_trade_history():
     with col2:
         display_mode = st.radio(
             "표시 형식",
-            ["카드", "테이블"],
+            ["테이블", "카드"],
             horizontal=True,
             key="display_mode"
         )
@@ -398,7 +396,7 @@ def show_trade_history():
 
     # 헤더 변경: 체결 내역 표시
     st.subheader("💰 체결 내역")
-    st.markdown("실제로 체결된 내역입니다 (주문 상태와 관계없이 체결량 > 0).")
+    st.markdown("실제로 체결된 내역입니다.")
 
     # 데이터 소스를 transactions_df로 변경
     if transactions_df.empty:
@@ -471,7 +469,7 @@ def show_trade_history():
 
         else: # 카드 형식
             st.markdown('<div class="trade-cards-container">', unsafe_allow_html=True)
-            for _, tx in page_tx.iterrows():
+            for idx, (_, tx) in enumerate(page_tx.iterrows()):
                 # 종류에 따라 텍스트와 색상 결정
                 if tx["종류"] == "매수":
                     tx_type_text = "매수함"
@@ -480,9 +478,15 @@ def show_trade_history():
                     tx_type_text = "매도함"
                     tx_type_color = "#4b4bff" # 파란색
 
+                # 인덱스(idx)를 사용하여 홀수/짝수 배경색 결정
+                if idx % 2 == 0: # 짝수 인덱스 (첫 번째, 세 번째 카드 등)
+                    card_bg_color = "rgba(240, 255, 240, 0.3)" # 연한 녹색
+                else: # 홀수 인덱스 (두 번째, 네 번째 카드 등)
+                    card_bg_color = "#f8f9fa" # 연한 회색
+
                 # transaction-card 클래스 사용, 상태 표시는 항상 완료로 간주
                 tx_card = f"""
-                <div class="transaction-card" style="border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                <div class="transaction-card" style="background-color: {card_bg_color}; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <h4 style="margin: 0; font-size: 1.2rem; font-weight: bold;">
                             {tx['코인']} <span style='color: {tx_type_color};'>{tx_type_text}</span>
