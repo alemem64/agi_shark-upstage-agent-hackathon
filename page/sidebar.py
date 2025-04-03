@@ -5,8 +5,8 @@ import threading
 import time
 from datetime import datetime
 
-from model.open_ai_agent import stream_openai_response
-from tools.auto_trader.auto_trader import AutoTrader
+from model.open_ai_agent import stream_openai_response, AutoTrader
+
 
 def show_sidebar():
     st.title("암호화폐 거래 AI Agent")
@@ -207,25 +207,48 @@ def show_sidebar():
         auto_trader_col1, auto_trader_col2, auto_trader_col3 = st.columns(3)
         
         with auto_trader_col1:
-            interval_minutes = st.text_input(
-                "분석 간격 (분)", 
-                value=str(st.session_state.auto_trader_settings['interval_minutes']),
-                key="interval_minutes_setting"
+            # 이전 값 저장
+            previous_interval = st.session_state.get('auto_trade_interval_seconds', 300)
+            
+            interval_seconds = st.number_input(
+                "거래 간격 (초)",
+                min_value=10,
+                max_value=3600,
+                value=previous_interval,
+                step=10,
+                key="auto_trade_interval_seconds_input"
             )
+            
+            # 거래 간격이 변경되었으면 에이전트 재초기화 필요 표시
+            if interval_seconds != previous_interval:
+                st.session_state.auto_trade_interval_seconds = interval_seconds
+                st.session_state['auto_trader_needs_reset'] = True
+                # 디버깅 메시지
+                st.info(f"거래 간격이 {previous_interval}초에서 {interval_seconds}초로 변경되었습니다. 에이전트를 재시작하세요.")
+            else:
+                st.session_state.auto_trade_interval_seconds = interval_seconds
             
         with auto_trader_col2:
-            max_trading_count = st.text_input(
-                "일일 최대 거래 횟수", 
-                value=str(st.session_state.auto_trader_settings['max_trading_count']),
-                key="max_trading_count_setting"
+            max_investment = st.number_input(
+                "최대 투자금",
+                min_value=10000,
+                max_value=10000000,
+                value=st.session_state.get('auto_trade_max_investment', 100000),
+                step=10000,
+                key="auto_trade_max_investment_input"
             )
+            st.session_state.auto_trade_max_investment = max_investment
             
         with auto_trader_col3:
-            max_investment = st.text_input(
-                "최대 투자 금액 (원)", 
-                value=str(st.session_state.auto_trader_settings['max_investment']),
-                key="max_investment_setting"
+            max_trading_count = st.number_input(
+                "일일 최대 거래 횟수",
+                min_value=1,
+                max_value=100,
+                value=st.session_state.get('auto_trade_max_count', 3),
+                step=1,
+                key="auto_trade_max_count_input"
             )
+            st.session_state.auto_trade_max_count = max_trading_count
         
         # 자동 거래 시작/중지 버튼
         auto_trader_control_col1, auto_trader_control_col2 = st.columns(2)
@@ -234,19 +257,7 @@ def show_sidebar():
             if st.button("자동 거래 시작", key="start_auto_trader", use_container_width=True, 
                         disabled=(st.session_state.auto_trader is not None and st.session_state.auto_trader.is_running)):
                 try:
-                    interval_minutes_val = int(interval_minutes)
-                    max_investment_val = int(max_investment)
-                    max_trading_count_val = int(max_trading_count)
-                    
-                    # 설정 저장
-                    st.session_state.auto_trader_settings.update({
-                        'interval_minutes': interval_minutes_val,
-                        'max_investment': max_investment_val,
-                        'max_trading_count': max_trading_count_val,
-                        'risk_level': risk_style
-                    })
-                    
-                    # 자동 거래 에이전트 생성 및 시작
+                    # 자동 거래 에이전트 생성
                     if 'upbit_access_key' not in st.session_state or not st.session_state.upbit_access_key:
                         st.error("Upbit API 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요.")
                     elif 'upbit_secret_key' not in st.session_state or not st.session_state.upbit_secret_key:
@@ -255,15 +266,27 @@ def show_sidebar():
                         st.error("OpenAI API 키가 설정되지 않았습니다. API 설정 탭에서 설정해주세요.")
                     else:
                         # 자동 거래 에이전트 생성
-                        if st.session_state.auto_trader is None:
+                        if st.session_state.auto_trader is None or st.session_state.get('auto_trader_needs_reset', False):
+                            # 기존 객체가 있고 실행 중이면 정지
+                            if st.session_state.auto_trader and st.session_state.auto_trader.is_running:
+                                st.session_state.auto_trader.stop()
+                                time.sleep(0.5)  # 정지 처리 대기
+                            
+                            # 세션 상태에서 설정값 확인하여 출력
+                            interval_seconds_value = st.session_state.get('auto_trade_interval_seconds', 300)
+                            
+                            # 중요: 명시적으로 설정값 표시
+                            st.write(f"⏱️ **거래 간격:** {interval_seconds_value}초")
+                            
                             st.session_state.auto_trader = AutoTrader(
-                                access_key=st.session_state.upbit_access_key,
-                                secret_key=st.session_state.upbit_secret_key,
                                 model_options=st.session_state.model_options,
-                                interval_minutes=interval_minutes_val,
-                                max_investment=max_investment_val,
-                                max_trading_count=max_trading_count_val
+                                interval_seconds=interval_seconds_value,
+                                max_investment=st.session_state.get('auto_trade_max_investment', 100000),
+                                max_trading_count=st.session_state.get('auto_trade_max_count', 3)
                             )
+                            
+                            # 명시적으로 interval_seconds 설정 - 객체 생성 후에도 직접 재설정
+                            st.session_state.auto_trader.interval_seconds = interval_seconds_value
                             
                             # 거래 기록을 채팅창에 전송하는 콜백 함수 설정
                             def trade_callback(trade_info):
@@ -286,10 +309,17 @@ def show_sidebar():
                                 st.session_state.messages.append({"role": "assistant", "content": trade_message})
                             
                             # 자동 거래 에이전트에 콜백 등록
-                            st.session_state.auto_trader.set_trade_callback(trade_callback)
+                            st.session_state.auto_trader.trade_callback = trade_callback
                             
+                            # 재설정 플래그 초기화
+                            st.session_state['auto_trader_needs_reset'] = False
+
+                        # Agent 생성
+                        from model.open_ai_agent import create_agent
+                        agent = create_agent(st.session_state.model_options)
+                        
                         # 자동 거래 에이전트 시작
-                        success = st.session_state.auto_trader.start()
+                        success = st.session_state.auto_trader.start(agent)
                         if success:
                             st.success("자동 거래가 시작되었습니다!")
                             
@@ -299,12 +329,12 @@ def show_sidebar():
                             자동 거래 에이전트가 시작되었습니다.
                             
                             ### 설정 정보
-                            - 분석 간격: {interval_minutes_val}분
-                            - 일일 최대 거래 횟수: {max_trading_count_val}회
-                            - 최대 투자 금액: {max_investment_val:,}원
+                            - 거래 간격: {interval_seconds}초
+                            - 일일 최대 거래 횟수: {max_trading_count}회
+                            - 최대 투자 금액: {max_investment:,}원
                             - 위험 성향: {risk_style}
                             
-                            에이전트는 {interval_minutes_val}분 간격으로 시장을 분석하고 자동으로 매수/매도를 진행합니다.
+                            에이전트는 {interval_seconds}초 간격으로 시장을 분석하고 자동으로 매수/매도를 진행합니다.
                             거래 내역은 이 채팅창에 표시됩니다.
                             """
                             
@@ -357,13 +387,24 @@ def show_sidebar():
                 time_until = ""
                 if status_info["next_check"]:
                     next_check = status_info["next_check"]
-                    # n분 후 표시 추가
+                    # 남은 시간 표시 개선
                     try:
                         next_time = datetime.strptime(status_info["next_check"], "%Y-%m-%d %H:%M:%S")
                         now = datetime.now()
                         if next_time > now:
-                            minutes_left = (next_time - now).total_seconds() // 60
-                            time_until = f"{int(minutes_left)}분 후"
+                            seconds_left = (next_time - now).total_seconds()
+                            
+                            # 시간 형식 개선
+                            if seconds_left >= 3600:  # 1시간 이상
+                                hours = int(seconds_left // 3600)
+                                minutes = int((seconds_left % 3600) // 60)
+                                time_until = f"{hours}시간 {minutes}분 후"
+                            elif seconds_left >= 60:  # 1분 이상
+                                minutes = int(seconds_left // 60)
+                                seconds = int(seconds_left % 60)
+                                time_until = f"{minutes}분 {seconds}초 후"
+                            else:  # 1분 미만
+                                time_until = f"{int(seconds_left)}초 후"
                     except:
                         pass
                 st.metric("다음 분석 시간", next_check, delta=time_until if time_until else None)
@@ -374,6 +415,9 @@ def show_sidebar():
                     f"{status_info['daily_trading_count']} / {status_info['max_trading_count']}"
                 )
             
+            # 설정 정보 표시 
+            st.write(f"⚙️ **현재 설정:** 간격 {status_info['interval_seconds']}초, 모델 {status_info['model']}")
+            
             # 진행 바 (다음 분석까지 남은 시간)
             if status_info["is_running"] and status_info["next_check"]:
                 try:
@@ -381,7 +425,7 @@ def show_sidebar():
                     now = datetime.now()
                     
                     if next_time > now:
-                        total_seconds = status_info["interval_minutes"] * 60
+                        total_seconds = status_info["interval_seconds"]
                         elapsed = total_seconds - (next_time - now).total_seconds()
                         progress = min(1.0, max(0.0, elapsed / total_seconds))
                         
@@ -395,6 +439,28 @@ def show_sidebar():
         else:
             st.info("자동 거래 에이전트가 초기화되지 않았습니다. 설정을 구성하고 '자동 거래 시작' 버튼을 눌러주세요.")
         
+        # 디버깅용 설정 표시
+        if st.session_state.get('debug_mode', False):
+            with st.expander("디버깅 정보", expanded=False):
+                current_settings = {
+                    "interval_seconds": st.session_state.get('auto_trade_interval_seconds', 300),
+                    "max_investment": st.session_state.get('auto_trade_max_investment', 100000),
+                    "max_trading_count": st.session_state.get('auto_trade_max_count', 3),
+                    "needs_reset": st.session_state.get('auto_trader_needs_reset', False)
+                }
+                
+                if st.session_state.auto_trader:
+                    current_settings["auto_trader_interval"] = st.session_state.auto_trader.interval_seconds
+                
+                st.json(current_settings)
+                
+                # 디버그 모드에서는 에이전트 초기화 버튼 표시
+                if st.button("에이전트 초기화", key="reset_agent"):
+                    if st.session_state.auto_trader and st.session_state.auto_trader.is_running:
+                        st.session_state.auto_trader.stop()
+                    st.session_state.auto_trader = None
+                    st.success("에이전트가 초기화되었습니다.")
+                    st.rerun()
 
 
         
