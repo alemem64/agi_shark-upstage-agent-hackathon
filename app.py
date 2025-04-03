@@ -280,6 +280,45 @@ st.markdown("""
         font-weight: 500;
     }
 
+    /* 채팅 메시지 스타일링 - 긴 텍스트 처리 */
+    [data-testid="stChatMessageContent"] {
+        overflow-x: auto !important;
+        max-width: 100% !important;
+        word-wrap: break-word !important;
+        white-space: pre-wrap !important;
+    }
+
+    /* 채팅 컨테이너 스타일링 */
+    [data-testid="stChatMessageContainer"] {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 0.5rem !important;
+    }
+
+    /* 코드 블록 내부 텍스트 처리 */
+    code {
+        white-space: pre-wrap !important;
+        overflow-x: auto !important;
+        max-width: 100% !important;
+        display: block !important;
+        padding: 0.5rem !important;
+    }
+
+    /* 긴 단어 처리 */
+    * {
+        overflow-wrap: break-word !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        hyphens: auto !important;
+    }
+
+    /* 사이드바 채팅 컨테이너 스타일링 */
+    [data-testid="stSidebar"] [data-testid="stChatMessageContainer"],
+    [data-testid="stSidebar"] [data-testid="stChatInputContainer"] {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
     /* 모바일 대응 */
     @media (max-width: 768px) {
         .main .block-container {
@@ -295,6 +334,11 @@ st.markdown("""
         .trade-cards-container {
             padding: 10px;
             max-height: 500px;
+        }
+
+        /* 모바일에서 채팅 컨테이너 조정 */
+        [data-testid="stChatMessageContainer"] {
+            padding: 0.3rem !important;
         }
     }
     </style>

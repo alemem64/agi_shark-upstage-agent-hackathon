@@ -32,7 +32,7 @@ def show_sidebar():
 
     with chat_tab:
 
-        chat_container = st.container(height=650, border=True)
+        chat_container = st.container(height=600, border=True)
         
         # 사용자 입력 처리 (채팅 컨테이너 아래에 배치)
         user_prompt = st.chat_input(
@@ -45,7 +45,7 @@ def show_sidebar():
         with chat_container:
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
-                    st.write(message["content"])
+                    st.markdown(message["content"])
         
         if user_prompt:
             st.session_state.agent_run_count += 1
@@ -76,7 +76,7 @@ def show_sidebar():
             # 스트리밍 방식으로 응답 생성 및 표시
             with chat_container:
                 with st.chat_message("user"):
-                    st.write(user_prompt_text)
+                    st.markdown(user_prompt_text)
                     
                 with st.chat_message("assistant"):
                     response_placeholder = st.empty()
