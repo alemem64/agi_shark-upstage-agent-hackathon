@@ -8,6 +8,10 @@ import os
 import datetime
 import traceback
 from typing import Dict, List, Optional, Any
+import threading
+from datetime import timedelta
+
+import pyupbit
 
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool, FunctionTool
@@ -15,6 +19,7 @@ from tools.document_parser.document_parser import DocumentParser
 from tools.information_extract.informaton_extract import information_extract
 from tools.rag.agent_tools import search_rag_documents
 from tools.upbit.upbit_api import get_available_coins_func, get_coin_price_info_func, buy_coin_func, sell_coin_func, check_order_status_func
+
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
         return "claude-3-7-sonnet-latest"
@@ -93,9 +98,20 @@ def create_agent(model_options):
     user_requirement = st.session_state.get('user_requirement', '')
     risk_style = st.session_state.get('risk_style', '중립적')
     trading_period = st.session_state.get('trading_period', '스윙')
-
-    pdf_files = [f for f in os.listdir("tools/web2pdf/always_see_doc_storage") if f.endswith('.pdf')]
-    pdf_files_base = [os.path.splitext(f)[0] for f in pdf_files]  # 확장자 제외한 파일명
+    
+    # 현재 날짜와 시간 정보 생성
+    current_datetime = datetime.datetime.now()
+    current_date_str = current_datetime.strftime("%Y년 %m월 %d일")
+    current_time_str = current_datetime.strftime("%H시 %M분")
+    current_weekday = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"][current_datetime.weekday()]
+    
+    # pdf_files 디렉토리가 없을 경우 대비한 예외 처리
+    pdf_files_base = []
+    try:
+        pdf_files = [f for f in os.listdir("tools/web2pdf/always_see_doc_storage") if f.endswith('.pdf')]
+        pdf_files_base = [os.path.splitext(f)[0] for f in pdf_files]
+    except (FileNotFoundError, OSError) as e:
+        log_error(e, "PDF 파일 목록 조회 오류")
     
     # 이전 메시지 가져오기
     previous_messages = st.session_state.get('messages', [])
@@ -157,6 +173,10 @@ def create_agent(model_options):
         Act according to the user's investment style and goals, but your ultimate mission is to achieve the best investment results.
 
         Always respond to the user in Korean regardless of the language they use to communicate with you.
+        
+        # 현재 시간 정보
+        오늘은 {current_date_str} {current_weekday}이며, 현재 시간은 {current_time_str}입니다.
+        이 정보를 기반으로 최신 시장 상황에 맞는 응답을 제공해주세요.
         
         {context}
         
