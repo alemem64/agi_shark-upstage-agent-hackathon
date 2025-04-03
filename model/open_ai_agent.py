@@ -1,6 +1,7 @@
 import streamlit as st
 import asyncio
 import os
+from typing import Dict, List, Any, Optional
 
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool
@@ -17,21 +18,31 @@ def get_model_name(model_options):
 
 # 문서에서 정보 추출하는 tool 생성
 @function_tool
-def extract_information_tool(img_path: str, fields_to_extract: dict, required_fields: list = None):
+def extract_information_tool(img_path: str, fields_to_extract: str, required_fields: Optional[List[str]] = None):
     """
     이미지에서 지정된 정보를 추출합니다.
     
     Args:
         img_path: 이미지 파일 경로
-        fields_to_extract: 추출할 필드와 설명 (예: {"bank_name": "은행 이름", "amount": "거래 금액"})
+        fields_to_extract: 추출할 필드와 설명 (JSON 형식의 문자열로 전달, 예: {"bank_name": "은행 이름", "amount": "거래 금액"})
         required_fields: 필수 필드 목록 (선택 사항)
     
     Returns:
         Dict: 추출된 정보 또는 오류
     """
+    # 문자열을 딕셔너리로 변환
+    import json
+    try:
+        fields_dict = json.loads(fields_to_extract)
+    except json.JSONDecodeError:
+        return {
+            'success': False,
+            'error': '필드 정보가 유효한 JSON 형식이 아닙니다.'
+        }
+    
     # 스키마 속성 구성
     schema_properties = {}
-    for field_name, description in fields_to_extract.items():
+    for field_name, description in fields_dict.items():
         schema_properties[field_name] = {
             "type": "string",
             "description": description
@@ -42,7 +53,7 @@ def extract_information_tool(img_path: str, fields_to_extract: dict, required_fi
 
 # 문서 파싱 도구
 @function_tool
-def parse_document_tool(file_names: list):
+def parse_document_tool(file_names: List[str]):
     """
     PDF 문서를 파싱하여 텍스트를 추출합니다.
     
@@ -50,7 +61,7 @@ def parse_document_tool(file_names: list):
         file_names: PDF 파일 이름 목록 (확장자 없이)
     
     Returns:
-        List: 각 문서의 파싱 결과 목록
+        Dict: 문서 파싱 결과를 담은 딕셔너리
     """
     parser = DocumentParser()
     return parser.parse_document(file_names)
