@@ -8,9 +8,11 @@ import os
 import datetime
 import traceback
 from typing import Dict, List, Optional, Any
+import os
 
 from openai.types.responses import ResponseTextDeltaEvent
-from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, FunctionTool
+from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool
+from tools.document_parser.document_parser import DocumentParser, FunctionTool
 
 # UpbitTrader를 직접 가져옵니다
 try:
@@ -967,13 +969,15 @@ def create_agent(model_options):
     user_requirement = st.session_state.get('user_requirement', '')
     risk_style = st.session_state.get('risk_style', '중립적')
     trading_period = st.session_state.get('trading_period', '스윙')
+
+    pdf_files = [f for f in os.listdir("tools/web2pdf/always_see_doc_storage") if f.endswith('.pdf')]
     
     log_info("사용자 투자 설정 로드됨", {
         "user_requirement": user_requirement,
         "risk_style": risk_style,
         "trading_period": trading_period
     })
-    
+
     # 이전 메시지 가져오기
     previous_messages = st.session_state.get('messages', [])
     context = ""
@@ -987,7 +991,7 @@ def create_agent(model_options):
             elif msg["role"] == "assistant":
                 context += f"AI: {msg['content']}\n"
         context += "\n"
-    
+
     log_info(f"이전 대화 기록 로드됨", {"message_count": len(previous_messages)})
     
     # 직접 FunctionTool 객체 생성 - 래퍼 함수를 사용하여 오류 처리 강화
@@ -1041,6 +1045,7 @@ def create_agent(model_options):
         buy_coin_tool,
         sell_coin_tool,
         check_order_status_tool,
+        WebSearchTool(search_context_size="high")
     ]
     
     # 디버그 모드 도구 추가 (개발자용)
@@ -1075,6 +1080,8 @@ def create_agent(model_options):
     API 키 설정 관련 문제는 API 설정 페이지로 안내하세요.
 
     도구를 사용하여 작업을 완료하세요.
+
+    참조 문서: "tools/web2pdf/always_see_doc_storage/{pdf_files}.pdf"
     """
     
     agent = Agent(
