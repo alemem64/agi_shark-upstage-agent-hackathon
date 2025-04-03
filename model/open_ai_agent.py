@@ -5,6 +5,7 @@ import os
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool
 from tools.document_parser.document_parser import DocumentParser
+from tools.information_extract.informaton_extract import information_extract
 
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
@@ -13,6 +14,46 @@ def get_model_name(model_options):
         return "claude-3-haiku-20240307"
     elif model_options == "gpt 4o mini":
         return "gpt-4o-mini"
+
+# 문서에서 정보 추출하는 tool 생성
+@function_tool
+def extract_information_tool(img_path: str, fields_to_extract: dict, required_fields: list = None):
+    """
+    이미지에서 지정된 정보를 추출합니다.
+    
+    Args:
+        img_path: 이미지 파일 경로
+        fields_to_extract: 추출할 필드와 설명 (예: {"bank_name": "은행 이름", "amount": "거래 금액"})
+        required_fields: 필수 필드 목록 (선택 사항)
+    
+    Returns:
+        Dict: 추출된 정보 또는 오류
+    """
+    # 스키마 속성 구성
+    schema_properties = {}
+    for field_name, description in fields_to_extract.items():
+        schema_properties[field_name] = {
+            "type": "string",
+            "description": description
+        }
+    
+    # information_extract 함수 호출
+    return information_extract(img_path, schema_properties, required_fields)
+
+# 문서 파싱 도구
+@function_tool
+def parse_document_tool(file_names: list):
+    """
+    PDF 문서를 파싱하여 텍스트를 추출합니다.
+    
+    Args:
+        file_names: PDF 파일 이름 목록 (확장자 없이)
+    
+    Returns:
+        List: 각 문서의 파싱 결과 목록
+    """
+    parser = DocumentParser()
+    return parser.parse_document(file_names)
 
 # Agent 객체 생성 함수
 def create_agent(model_options):
@@ -32,7 +73,8 @@ def create_agent(model_options):
     trading_period = st.session_state.get('trading_period', '스윙')
 
     pdf_files = [f for f in os.listdir("tools/web2pdf/always_see_doc_storage") if f.endswith('.pdf')]
-
+    pdf_files_base = [os.path.splitext(f)[0] for f in pdf_files]  # 확장자 제외한 파일명
+    
     # 이전 메시지 가져오기
     previous_messages = st.session_state.get('messages', [])
     context = ""
@@ -60,10 +102,10 @@ def create_agent(model_options):
         위험 성향: {risk_style}
         거래 기간: {trading_period}
 
-        참조 문서: "tools/web2pdf/always_see_doc_storage/{pdf_files}.pdf"
+        사용 가능한 참조 문서 목록: {", ".join(pdf_files_base)}
         """,
         model=get_model_name(model_options),
-        tools=[WebSearchTool(search_context_size="high")],
+        tools=[WebSearchTool(search_context_size="high"), parse_document_tool, extract_information_tool],
     )
     
     return agent
