@@ -121,34 +121,26 @@ def get_user_orders(_upbit_trade, max_pages=5) -> Tuple[pd.DataFrame, pd.DataFra
     """사용자의 주문 내역과 체결 내역 조회 (여러 페이지 조회, 코드 재구성)"""
     orders_columns = ["주문시간", "코인", "종류", "주문방식", "주문가격", "주문수량", "체결수량", "미체결수량", "주문총액", "상태", "주문번호"]
     transactions_columns = ["체결시간", "코인", "종류", "거래수량", "거래단가", "거래금액", "수수료", "주문시간", "주문번호"]
-
-    all_api_orders = [] # 모든 페이지 API 응답 누적
+    all_api_orders = []
 
     if not _upbit_trade or not _upbit_trade.is_valid:
         st.error("Upbit 인스턴스 생성 또는 API 키 인증 실패.")
         return pd.DataFrame(columns=orders_columns), pd.DataFrame(columns=transactions_columns)
 
     # 1. 여러 페이지 API 호출
-    st.info(f"[Debug] 최대 {max_pages} 페이지까지 주문 내역 조회 시작...")
     try:
         for page_num in range(1, max_pages + 1):
-            st.info(f"[Debug] 페이지 {page_num} 조회 시도...")
             page_orders = _upbit_trade.get_order_history(page=page_num, limit=100)
-            st.info(f"[Debug] 페이지 {page_num} API 결과 수신 (타입: {type(page_orders)}, 길이: {len(page_orders) if isinstance(page_orders, list) else 'N/A'})")
 
             if isinstance(page_orders, list):
                 if not page_orders:
-                    st.info(f"[Debug] 페이지 {page_num} 결과 없음. 조회 중단.")
                     break
                 all_api_orders.extend(page_orders)
             else:
-                st.warning(f"[Debug] 페이지 {page_num} API 응답이 리스트가 아닙니다: {page_orders}")
-                break # 리스트 아니면 중단
+                break
     except Exception as api_call_error:
         st.error(f"API 호출 중 오류 발생: {str(api_call_error)}")
         return pd.DataFrame(columns=orders_columns), pd.DataFrame(columns=transactions_columns)
-
-    st.info(f"[Debug] 총 {len(all_api_orders)}건의 API 응답 데이터 수집 완료.")
 
     # 2. 수집된 데이터 처리
     processed_orders = []
@@ -158,18 +150,14 @@ def get_user_orders(_upbit_trade, max_pages=5) -> Tuple[pd.DataFrame, pd.DataFra
     if not all_api_orders:
         st.warning("API로부터 유효한 주문 데이터를 수집하지 못했습니다.")
     else:
-        st.info(f"[Debug] {len(all_api_orders)}건 데이터 처리 시작...")
         for i, order in enumerate(all_api_orders):
             try:
-                # 개별 주문 처리 로직
                 if isinstance(order, dict) and 'error' in order:
-                    st.error(f"[Debug] API 응답 오류 포함 (주문 인덱스 {i}): {order['error']}")
                     error_count += 1
                     continue
 
                 market = order.get('market', ''); side = order.get('side', ''); state = order.get('state', '')
                 if not market or not side or not state:
-                    # st.warning(f"[Debug] 주문 인덱스 {i} 건너뜀 (필수 필드 누락)") # 로그 최소화
                     continue
 
                 ord_type = order.get('ord_type', ''); created_at = order.get('created_at', ''); uuid = order.get('uuid', '')
@@ -189,29 +177,16 @@ def get_user_orders(_upbit_trade, max_pages=5) -> Tuple[pd.DataFrame, pd.DataFra
                 }
                 processed_orders.append(order_info)
 
-                # 체결 완료된 주문 정보 추가 -> '체결된 수량이 있는' 주문 정보 추가로 변경
-                # 조건 변경: state == 'done' 제거, executed_volume > 0 만 확인
                 if executed_volume > 0:
                     avg_price_str = order.get('avg_price')
-                    trade_price = 0.0 # 기본값 설정
+                    trade_price = 0.0
                     if avg_price_str:
                         try:
                             trade_price = float(avg_price_str)
                         except (ValueError, TypeError):
-                            st.warning(f"[Debug] avg_price 파싱 오류: {avg_price_str}")
                             trade_price = 0.0
-                    # else 제거: avg_price가 없거나 파싱 오류 시, order_price를 사용해야 함
-                    #            하지만 avg_price가 없는 경우는 보통 지정가(limit) 주문이고, 이 경우 price가 체결가 역할을 할 수 있음
-                    #            market 주문 완료 시 avg_price가 반드시 있어야 함. avg_price 없고 price도 0이면 문제.
-                    #            보다 안전하게: avg_price 없으면 order_price 사용
-                    if trade_price == 0.0 and order_price > 0: # avg_price가 없거나 유효하지 않았고, 주문 가격은 있을 때
-                        trade_price = order_price
-
-                    # trade_price가 여전히 0이면 체결 정보를 생성하기 어려움 (시장가 체결인데 avg_price 누락 등)
-                    if trade_price <= 0:
-                        st.warning(f"[Debug] 주문 인덱스 {i} 건너뜀 (체결량 있으나 유효한 체결 단가 없음): uuid={uuid}, avg_price={avg_price_str}, price={order_price}")
-                        continue # 유효한 단가 없으면 체결 내역 추가 불가
-
+                    if trade_price == 0.0 and order_price > 0: trade_price = order_price
+                    if trade_price <= 0: continue
                     trade_volume = executed_volume
                     trade_amount = trade_price * trade_volume
 
@@ -222,19 +197,15 @@ def get_user_orders(_upbit_trade, max_pages=5) -> Tuple[pd.DataFrame, pd.DataFra
                         "거래수량": trade_volume,
                         "거래단가": trade_price,
                         "거래금액": trade_amount,
-                        "수수료": paid_fee, # 취소된 주문의 paid_fee는 0일 수 있음
+                        "수수료": paid_fee,
                         "주문시간": order_datetime_str,
                         "주문번호": uuid
                     }
                     processed_transactions.append(transaction_info)
 
             except Exception as process_error:
-                st.warning(f"[Debug] 데이터 처리 중 오류 발생 (주문 인덱스 {i}): {str(process_error)} - 데이터: {order}")
                 error_count += 1
                 continue
-        # 데이터 처리 루프 끝
-
-        st.info(f"[Debug] 데이터 처리 완료. 총 주문: {len(processed_orders)}, 총 체결: {len(processed_transactions)}, 처리 오류: {error_count}건")
 
     # 3. 최종 DataFrame 생성 및 반환
     orders_df = pd.DataFrame(columns=orders_columns)
@@ -388,12 +359,10 @@ def show_trade_history():
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     with col1:
         if st.button("🔄 새로고침", key="history_refresh"):
-            # 캐시 초기화 및 앱 재실행
             st.cache_data.clear()
             st.rerun()
     
     with col2:
-        # 표시 형식 선택
         display_mode = st.radio(
             "표시 형식",
             ["카드", "테이블"],
@@ -407,7 +376,6 @@ def show_trade_history():
         else:
             st.warning("API 키 설정이 필요합니다. API 설정 탭에서 키를 입력하세요.")
     
-    # API 키가 없으면 안내 메시지 표시 후 종료
     if not has_api_keys:
         st.info("실제 거래 내역을 보려면 API 설정 탭에서 API 키를 설정하세요.")
         st.markdown("""
@@ -427,11 +395,6 @@ def show_trade_history():
     # 주문 내역(모든 상태)과 체결 내역(체결량 > 0) 가져오기
     with st.spinner("실제 체결 내역을 불러오는 중..."):
         orders_df, transactions_df = get_user_orders(upbit_trade)
-        # transactions_df: 체결량 > 0 인 모든 주문
-        st.info(f"[Debug] get_user_orders 반환 직후 - 체결 DF {transactions_df.shape[0]} 행") # 로그 대상 transactions_df
-        if not transactions_df.empty:
-            st.info(f"[Debug] 반환된 체결 DF 내용 (첫 5행):")
-            st.dataframe(transactions_df.head()) # 내용 확인용
 
     # 헤더 변경: 체결 내역 표시
     st.subheader("💰 체결 내역")
@@ -439,7 +402,7 @@ def show_trade_history():
 
     # 데이터 소스를 transactions_df로 변경
     if transactions_df.empty:
-        st.warning("체결된 내역이 없습니다.") # 메시지 변경
+        st.warning("체결된 내역이 없습니다.")
         return
 
     # 필터링 옵션 (대상: transactions_df, 상태 필터 제거)
@@ -469,12 +432,6 @@ def show_trade_history():
     if tx_type != "전체" and "종류" in filtered_tx.columns:
         filtered_tx = filtered_tx[filtered_tx["종류"] == tx_type]
 
-    # 필터링 후 로그 (대상: filtered_tx)
-    st.info(f"[Debug] 필터링 후 - 필터링된 체결 DF {filtered_tx.shape[0]} 행")
-    if not filtered_tx.empty:
-        st.info(f"[Debug] 필터링된 체결 DF 내용 (첫 5행):")
-        st.dataframe(filtered_tx.head())
-
     if filtered_tx.empty:
         st.info("필터링 조건에 맞는 체결 내역이 없습니다.")
     else:
@@ -487,13 +444,7 @@ def show_trade_history():
             st.session_state.tx_page = 0
         start_idx = st.session_state.tx_page * tx_per_page
         end_idx = min(start_idx + tx_per_page, len(filtered_tx))
-        page_tx = filtered_tx.iloc[start_idx:end_idx] # 변수명 복구
-
-        # 페이지 표시 전 로그 (대상: page_tx)
-        st.info(f"[Debug] 페이지네이션 후 - 현재 페이지 체결 DF {page_tx.shape[0]} 행")
-        if not page_tx.empty:
-            st.info(f"[Debug] 현재 페이지 체결 DF 내용 (첫 5행):")
-            st.dataframe(page_tx.head())
+        page_tx = filtered_tx.iloc[start_idx:end_idx]
 
         if display_mode == "테이블":
             # 테이블 컬럼 복구 (체결 정보 위주)
@@ -519,15 +470,23 @@ def show_trade_history():
             )
 
         else: # 카드 형식
-            # 카드 내용 복구 (체결 정보 위주, 상태 표시 제거)
             st.markdown('<div class="trade-cards-container">', unsafe_allow_html=True)
-            for _, tx in page_tx.iterrows(): # 변수명 order -> tx
-                tx_type_text = "매수함" if tx["종류"] == "매수" else "매도함"
+            for _, tx in page_tx.iterrows():
+                # 종류에 따라 텍스트와 색상 결정
+                if tx["종류"] == "매수":
+                    tx_type_text = "매수함"
+                    tx_type_color = "#ff4b4b" # 빨간색
+                else:
+                    tx_type_text = "매도함"
+                    tx_type_color = "#4b4bff" # 파란색
+
                 # transaction-card 클래스 사용, 상태 표시는 항상 완료로 간주
                 tx_card = f"""
                 <div class="transaction-card" style="border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <h4 style="margin: 0; font-size: 1.2rem; font-weight: bold;">{tx['코인']} {tx_type_text}</h4>
+                        <h4 style="margin: 0; font-size: 1.2rem; font-weight: bold;">
+                            {tx['코인']} <span style='color: {tx_type_color};'>{tx_type_text}</span>
+                        </h4>
                         <span class="status-done" style="padding: 5px 10px; border-radius: 20px;">체결완료</span>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
