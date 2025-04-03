@@ -39,70 +39,94 @@ class Trade:
             self.upbit = None
             print(f"⚠️ 경고: 업비트 API 초기화 중 오류: {e}")
     
-    def get_order_history(self, ticker_or_uuid="", state=None, page=1, limit=100):
-        """주문 내역 조회 (개선된 버전)
+    def get_order_history(self, ticker_or_uuid="", state=None, page=1, limit=100, states=None):
+        """주문 내역 조회 (개선된 버전, 페이지네이션 지원 강화)
         
         Args:
             ticker_or_uuid (str): 티커명 또는 주문 UUID (빈 값: 전체 주문 조회)
-            state (str): 주문 상태 (wait, done, cancel)
-            page (int): 페이지 번호
+            state (str): deprecated, use states instead.
+            page (int): 조회할 페이지 번호 (1부터 시작)
             limit (int): 요청 개수 (최대 100)
-            
+            states (list): 조회할 주문 상태 리스트 (e.g., ["wait", "done"]), None이면 모든 상태 조회 시도
+        
         Returns:
             list: 주문 내역 목록
         """
         if not self.is_valid or not self.upbit:
             print("유효한 API 키가 설정되지 않았습니다.")
             return []
-            
+        
+        # states 인자 처리 (state 인자 호환성 유지)
+        if states is None:
+            if state: # 기존 state 인자가 있으면 사용
+                target_states = [state]
+            else: # 둘 다 없으면 모든 상태 조회
+                target_states = ["wait", "done", "cancel"]
+        else:
+            target_states = states
+        
+        all_results = []
         try:
-            # 1. pyupbit 라이브러리 사용 시도
-            orders = []
-            
-            # 상태가 지정되지 않은 경우 모든 상태 조회
-            states = [state] if state else ["wait", "done", "cancel"]
-            
-            for current_state in states:
+            # pyupbit 라이브러리 사용 시도 (ticker_or_uuid 처리 수정)
+            for current_state in target_states:
                 try:
-                    # pyupbit.get_order 직접 호출
-                    result = self.upbit.get_order(ticker_or_uuid, state=current_state, limit=limit)
+                    call_args = {}
+                    if ticker_or_uuid:
+                        if len(ticker_or_uuid) > 30 and '-' in ticker_or_uuid:
+                            call_args['uuids'] = [ticker_or_uuid]
+                        else:
+                            call_args['market'] = ticker_or_uuid
+                    call_args['state'] = current_state
+                    call_args['limit'] = limit
+                    call_args['page'] = page
+                    
+                    print(f"[Debug] pyupbit.get_order 호출: {call_args}")
+                    result = self.upbit.get_order(**call_args)
+                    print(f"[Debug] pyupbit.get_order 결과 ({current_state}, page={page}): {type(result)}")
                     
                     if isinstance(result, list):
-                        orders.extend(result)
-                    elif isinstance(result, dict) and result:  # 딕셔너리이고 비어있지 않은 경우
-                        orders.append(result)
-                except Exception as e:
-                    print(f"{current_state} 상태 주문 조회 중 오류: {str(e)}")
-                    continue
-                    
-            if orders:
-                return orders
+                        all_results.extend(result)
+                    elif isinstance(result, dict) and 'error' not in result:
+                        all_results.append(result)
+                    elif isinstance(result, dict) and 'error' in result:
+                        print(f"[Debug] pyupbit.get_order 가 오류 반환: {result['error']}")
                 
-            # 2. 직접 API 호출 시도 (fallback)
-            return self._get_orders_direct_api(ticker_or_uuid, state, limit)
+                except Exception as e:
+                    print(f"pyupbit {current_state} 상태 주문 조회 중 오류: {str(e)}")
+                    print(f"[Debug] pyupbit 오류 발생. 직접 API 호출 시도 (page={page})...")
+                    # Fallback 시 page 인자 전달
+                    direct_result = self._get_orders_direct_api(ticker_or_uuid=ticker_or_uuid, state=current_state, page=page, limit=limit)
+                    if isinstance(direct_result, list):
+                        all_results.extend(direct_result)
+                    elif isinstance(direct_result, dict) and 'error' not in direct_result:
+                        all_results.append(direct_result)
+                    elif isinstance(direct_result, dict) and 'error' in direct_result:
+                        print(f"[Debug] 직접 API 호출도 오류 반환: {direct_result['error']}")
             
+            if all_results:
+                print(f"[Debug] 페이지 {page} 주문 결과 {len(all_results)} 건 반환")
+                return all_results
+            else:
+                print(f"[Debug] 페이지 {page} pyupbit 및 직접 API 호출 결과 없음.")
+                return []
+        
         except Exception as e:
-            print(f"주문 내역 조회 중 오류: {str(e)}")
-            # 3. 에러 발생 시 직접 API 호출 시도
-            return self._get_orders_direct_api(ticker_or_uuid, state, limit)
+            print(f"get_order_history(page={page}) 실행 중 예외 발생: {str(e)}")
+            return []
     
-    def _get_orders_direct_api(self, ticker_or_uuid=None, state=None, limit=100):
+    def _get_orders_direct_api(self, ticker_or_uuid=None, state=None, page=1, limit=100):
         """직접 API를 호출하여 주문 내역 조회"""
         try:
-            query = {'limit': limit}
-            
-            # UUID인 경우와 티커인 경우 구분
+            query = {'limit': limit, 'page': page}
             if ticker_or_uuid:
-                if len(ticker_or_uuid) >= 30:  # UUID로 추정
+                if len(ticker_or_uuid) >= 30:
                     query['uuid'] = ticker_or_uuid
-                else:  # 티커로 추정
+                else:
                     query['market'] = ticker_or_uuid
-            
             if state:
                 query['state'] = state
-                
-            query_string = urlencode(query).encode()
             
+            query_string = urlencode(query).encode()
             m = hashlib.sha512()
             m.update(query_string)
             query_hash = m.hexdigest()
@@ -115,20 +139,23 @@ class Trade:
             }
             
             jwt_token = jwt.encode(payload, self.secret_key)
-            # JWT 인코딩 결과가 bytes인 경우 문자열로 변환
             if isinstance(jwt_token, bytes):
                 jwt_token = jwt_token.decode('utf-8')
                 
             authorize_token = f'Bearer {jwt_token}'
             headers = {'Authorization': authorize_token}
             
+            print(f"[Debug] 직접 API 호출: GET {self.server_url}/v1/orders, Params: {query}")
             response = requests.get(f"{self.server_url}/v1/orders", params=query, headers=headers)
             
             if response.status_code == 200:
                 return response.json()
             else:
                 print(f"API 요청 실패 (HTTP {response.status_code}): {response.text}")
-                return []
+                try:
+                    return response.json()
+                except:
+                    return []
         except Exception as e:
             print(f"직접 API 호출 중 오류: {e}")
             return []

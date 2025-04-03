@@ -111,21 +111,28 @@ def show_api_settings():
     # 둥근 입력란을 위한 CSS 추가
     st.markdown("""
     <style>
-    div[data-baseweb="input"], div[data-baseweb="base-input"] {
+    /* 기존 스타일 */
+    div[data-baseweb="input"] > div, /* 기본 인풋 컨테이너 */
+    div[data-baseweb="base-input"] > div { /* 베이스 인풋 컨테이너 */
         border-radius: 8px !important;
+        border: 1px solid #ccc !important; /* 테두리 추가 */
+        transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* 부드러운 효과 */
     }
-    input[type="password"] {
-        border-radius: 8px !important;
+    /* 포커스 시 테두리 강조 */
+    div[data-baseweb="input"] > div:focus-within,
+    div[data-baseweb="base-input"] > div:focus-within {
+        border-color: #007bff !important; /* 포커스 색상 */
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25) !important; /* 포커스 시 그림자 효과 */
     }
-    input[type="text"] {
-        border-radius: 8px !important;
+
+    /* Streamlit의 기본 스타일 오버라이드를 위해 좀 더 구체적으로 지정 */
+    .stTextInput > div > div > input[type="text"],
+    .stTextInput > div > div > input[type="password"] {
+        border-radius: 8px !important; /* 내부 input에도 적용 */
+        border: none !important; /* 내부 input 자체 테두리는 제거 (컨테이너 테두리 사용) */
+        padding: 8px 10px !important; /* 내부 패딩 조정 */
     }
-    .stTextInput > div {
-        border-radius: 8px !important;
-    }
-    .stTextInput > div > div {
-        border-radius: 8px !important;
-    }
+
     .stButton > button {
         border-radius: 8px !important;
     }
