@@ -4,9 +4,15 @@ import os
 
 class DocumentParser:
     def __init__(self):
-        self.api_key = st.session_state.upstage_api_key
+        self.name = "document_parser"
+        self.description = "Parse and extract text from PDF documents"
+        self.api_key = st.session_state.get('upstage_api_key', None)
         self.url = "https://api.upstage.ai/v1/document-ai/document-parse"
         self.base_path = "tools/web2pdf/always_see_doc_storage/"
+    
+    def __call__(self, input_data=None):
+        """Tool interface required for agents library"""
+        return self.parse_document(input_data)
         
     def parse_document(self, input_data):
         """문서 파싱을 수행하는 메서드 - 파일 내용 또는 파일명 리스트를 처리"""
@@ -125,12 +131,12 @@ class DocumentParser:
                 }
 
 # 사용 예시:
-parser = DocumentParser()
-file_list = ["bitcoin_report", "bitcoin_report2"]  # .pdf 확장자는 자동으로 추가됨
-results = parser.parse_document(file_list)
-for result in results:
-    if result['success']:
-        print(f"File: {result['metadata']['file_name']}")
-        print(f"Text: {result['text'][:100]}...")  # 첫 100자만 출력
-    else:
-        print(f"Error in {result.get('file_name', 'unknown')}: {result['error']}")
+# parser = DocumentParser()
+# file_list = ["bitcoin_report", "bitcoin_report2"]  # .pdf 확장자는 자동으로 추가됨
+# results = parser.parse_document(file_list)
+# for result in results:
+#     if result['success']:
+#         print(f"File: {result['metadata']['file_name']}")
+#         print(f"Text: {result['text'][:100]}...")  # 첫 100자만 출력
+#     else:
+#         print(f"Error in {result.get('file_name', 'unknown')}: {result['error']}")

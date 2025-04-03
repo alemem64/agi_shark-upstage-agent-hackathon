@@ -4,6 +4,7 @@ import os
 
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool
+from tools.document_parser.document_parser import DocumentParser
 
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
@@ -59,10 +60,10 @@ def create_agent(model_options):
         위험 성향: {risk_style}
         거래 기간: {trading_period}
 
-        참조 문서: {pdf_files}
+        참조 문서: "tools/web2pdf/always_see_doc_storage/{pdf_files}.pdf"
         """,
         model=get_model_name(model_options),
-        tools=[WebSearchTool()],
+        tools=[WebSearchTool(search_context_size="high")],
     )
     
     return agent
