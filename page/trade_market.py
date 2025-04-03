@@ -545,11 +545,14 @@ def show_coin_details(_upbit_trade, coin_ticker: str):
         
         with col1:
             st.subheader("매수")
+            # 최소 주문 금액 (KRW 잔고가 5000 미만일 경우 1000으로 설정)
+            min_buy_amount = min(5000, max(1000, int(krw_balance))) if krw_balance > 0 else 1000
+            
             buy_amount = st.number_input(
                 "매수 금액 (KRW)",
-                min_value=5000,  # 최소 주문 금액
-                max_value=int(krw_balance),
-                value=min(5000, int(krw_balance)),
+                min_value=min(min_buy_amount, int(krw_balance)) if krw_balance > 0 else 1000,  # 최소값은 잔고와 최소 주문 금액 중 작은 값
+                max_value=int(max(krw_balance, 1000)),  # 최대값은 잔고 (잔고가 0이면 1000으로 설정)
+                value=min(min_buy_amount, int(krw_balance)) if krw_balance > 0 else 1000,  # 초기값도 동일하게 설정
                 step=1000,
                 key=f"{coin_name}_buy_amount"
             )
