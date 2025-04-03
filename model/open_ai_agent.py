@@ -12,6 +12,21 @@ from typing import Dict, List, Optional, Any
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, FunctionTool
 
+# UpbitTrader를 직접 가져옵니다
+try:
+    from upbit.upbit_trader import UpbitTrader
+except ImportError:
+    # upbit_trader 모듈이 없는 경우 대체 구현
+    class UpbitTrader:
+        def __init__(self, access_key, secret_key):
+            self.access_key = access_key
+            self.secret_key = secret_key
+            self.is_valid = False
+            
+        def get_balance(self, ticker):
+            log_error(None, f"UpbitTrader 모듈이 로드되지 않았습니다.")
+            return 0
+
 # 로깅 설정
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -78,10 +93,36 @@ def log_info(message, data=None):
         with st.expander(f"디버그 정보: {message}"):
             st.json(data)
 
-# upbit 관련 모듈 추가
-sys.path.append("tools/upbit")
-from UPBIT import Trade
-from page.api_setting import get_upbit_trade_instance
+# 업비트 인스턴스를 가져오는 함수
+def get_upbit_instance():
+    """업비트 API 인스턴스를 반환합니다."""
+    upbit_access = st.session_state.get('upbit_access_key', '')
+    upbit_secret = st.session_state.get('upbit_secret_key', '')
+    
+    if upbit_access and upbit_secret:
+        try:
+            import pyupbit
+            upbit = pyupbit.Upbit(upbit_access, upbit_secret)
+            return upbit
+        except Exception as e:
+            log_error(e, "업비트 인스턴스 생성 중 오류")
+    
+    return None
+
+# 업비트 트레이더 인스턴스를 가져오는 함수
+def get_upbit_trade_instance():
+    """업비트 트레이더 인스턴스를 반환합니다."""
+    upbit_access = st.session_state.get('upbit_access_key', '')
+    upbit_secret = st.session_state.get('upbit_secret_key', '')
+    
+    if upbit_access and upbit_secret:
+        try:
+            trader = UpbitTrader(upbit_access, upbit_secret)
+            return trader
+        except Exception as e:
+            log_error(e, "업비트 트레이더 인스턴스 생성 중 오류")
+    
+    return None
 
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
@@ -92,356 +133,554 @@ def get_model_name(model_options):
         return "gpt-4o-mini"
 
 # 도구 함수 구현
-async def get_available_coins_func(ctx, args):
+async def get_available_coins_func(ctx, args=None):
     """
-    거래 가능한 코인 목록을 조회합니다.
+    거래 가능한 코인 목록과 현재 보유 중인 코인 목록을 반환합니다.
+    사용자가 매도하려는 경우에는 보유 중인 코인만 표시합니다.
     """
-    function_name = "get_available_coins"
-    log_info(f"{function_name} 함수 호출")
+    log_info("get_available_coins 함수 호출")
     
-    st.write("거래 가능 코인 목록을 불러오는 중...")
-    upbit_trade = get_upbit_trade_instance()
+    action_type = ""
+    if args and isinstance(args, dict):
+        action_type = args.get("action_type", "").lower()  # 'buy' 또는 'sell'
+    elif isinstance(args, str):
+        try:
+            args_dict = json.loads(args)
+            action_type = args_dict.get("action_type", "").lower()
+        except:
+            # 문자열을 JSON으로 파싱할 수 없는 경우 무시
+            pass
     
     try:
-        if upbit_trade and upbit_trade.is_valid:
-            log_info(f"{function_name}: 유효한 Upbit 인스턴스로 실제 데이터 조회 시도")
-            # 실제 데이터 가져오기
-            market_info = upbit_trade.get_market_all()
-            
-            if market_info:
-                # KRW 마켓만 필터링
-                krw_markets = [item for item in market_info if item['market'].startswith('KRW-')]
-                log_info(f"{function_name}: {len(krw_markets)}개의 KRW 마켓 코인 조회됨")
-                
-                # 결과 포맷팅
-                result = []
-                for market in krw_markets:
-                    result.append({
-                        'ticker': market['market'],
-                        'korean_name': market.get('korean_name', ''),
-                        'english_name': market.get('english_name', '')
-                    })
-                
-                response = json.dumps(result, ensure_ascii=False)
-                log_info(f"{function_name}: 성공", {"coin_count": len(result)})
-                return response
+        upbit = get_upbit_instance()
         
-        # API 키가 없거나 유효하지 않은 경우 샘플 데이터 반환
-        log_info(f"{function_name}: API 키 없음 또는 유효하지 않음, 샘플 데이터 사용")
-        sample_data = [
-            {'ticker': 'KRW-BTC', 'korean_name': '비트코인', 'english_name': 'Bitcoin'},
-            {'ticker': 'KRW-ETH', 'korean_name': '이더리움', 'english_name': 'Ethereum'},
-            {'ticker': 'KRW-XRP', 'korean_name': '리플', 'english_name': 'Ripple'},
-            {'ticker': 'KRW-SOL', 'korean_name': '솔라나', 'english_name': 'Solana'},
-            {'ticker': 'KRW-DOGE', 'korean_name': '도지코인', 'english_name': 'Dogecoin'}
-        ]
-        return json.dumps(sample_data, ensure_ascii=False)
-    
+        if upbit:
+            log_info("get_available_coins: 유효한 Upbit 인스턴스로 실제 데이터 조회 시도")
+            
+            # 사용자의 보유 코인 목록 조회
+            portfolio_coins = []
+            try:
+                balances = upbit.get_balances()
+                for balance in balances:
+                    if balance['currency'] != 'KRW' and float(balance['balance']) > 0:
+                        portfolio_coins.append({
+                            'ticker': f"KRW-{balance['currency']}",
+                            'korean_name': balance['currency'],  # API에서 한글 이름을 따로 제공하지 않음
+                            'balance': float(balance['balance']),
+                            'avg_buy_price': float(balance['avg_buy_price'])
+                        })
+            except Exception as e:
+                log_error(e, "보유 코인 목록 조회 중 오류 발생")
+                # 오류 발생해도 계속 진행
+            
+            # 매도 목적인 경우, 보유 코인만 반환
+            if action_type == "sell":
+                log_info("get_available_coins: 매도용 코인 목록 필터링 (보유 코인만)")
+                if not portfolio_coins:
+                    return json.dumps({
+                        "success": True,
+                        "message": "현재 보유 중인 코인이 없습니다.",
+                        "coins": []
+                    }, ensure_ascii=False)
+                
+                return json.dumps({
+                    "success": True,
+                    "message": f"보유 중인 코인 {len(portfolio_coins)}개를 찾았습니다.",
+                    "coins": portfolio_coins
+                }, ensure_ascii=False)
+            
+            # KRW 마켓 코인 조회
+            try:
+                import pyupbit
+                markets = pyupbit.get_tickers(fiat="KRW")
+                market_info = []
+                
+                # 시장 정보 가져오기
+                for market in markets[:20]:  # 상위 20개만 처리 (속도 향상)
+                    try:
+                        ticker_info = pyupbit.get_current_price(market)
+                        if ticker_info:
+                            market_info.append({
+                                'market': market,
+                                'korean_name': market.replace('KRW-', '')
+                            })
+                    except:
+                        continue
+            except Exception as e:
+                log_error(e, "KRW 마켓 코인 조회 중 오류 발생")
+                market_info = []
+            
+            krw_markets = market_info
+            log_info(f"get_available_coins: {len(krw_markets)}개의 KRW 마켓 코인 조회됨")
+            
+            # 위험 성향에 기반해 추천 코인 필터링 (예시)
+            risk_style = st.session_state.get('risk_style', '중립적')
+            risk_filters = {
+                '보수적': lambda m: m['market'] in ['KRW-BTC', 'KRW-ETH', 'KRW-XRP', 'KRW-ADA', 'KRW-DOGE'],
+                '중립적': lambda m: True,  # 모든 코인 허용
+                '공격적': lambda m: True   # 모든 코인 허용
+            }
+            
+            filtered_markets = [m for m in krw_markets if risk_filters.get(risk_style, lambda x: True)(m)]
+            
+            # 결과 제한 (최대 10개)
+            result_markets = filtered_markets[:10] if len(filtered_markets) > 10 else filtered_markets
+            
+            # 결과 형식 변환
+            coins = []
+            for market in result_markets:
+                coins.append({
+                    'ticker': market['market'],
+                    'korean_name': market['korean_name']
+                })
+            
+            log_info("get_available_coins: 성공")
+            return json.dumps({
+                "success": True,
+                "message": f"거래 가능한 코인 {len(coins)}개를 찾았습니다.",
+                "coins": coins,
+                "portfolio": portfolio_coins  # 보유 코인 정보 추가
+            }, ensure_ascii=False)
+            
+        else:  # upbit API 인스턴스 없음
+            # 데모 데이터 - 연결할 API 키가 없을 때
+            log_info("get_available_coins: API 연결 없이 데모 데이터 반환")
+            
+            # 데모용 보유 코인 목록
+            demo_portfolio = [
+                {'ticker': 'KRW-BTC', 'korean_name': '비트코인', 'balance': 0.001, 'avg_buy_price': 65000000},
+                {'ticker': 'KRW-ETH', 'korean_name': '이더리움', 'balance': 0.05, 'avg_buy_price': 3500000}
+            ]
+            
+            # 매도 목적인 경우, 데모 보유 코인만 반환
+            if action_type == "sell":
+                return json.dumps({
+                    "success": True,
+                    "message": "보유 중인 코인 2개를 찾았습니다. (데모 모드)",
+                    "coins": demo_portfolio,
+                    "is_demo": True
+                }, ensure_ascii=False)
+            
+            # 데모용 거래 가능 코인 목록
+            demo_coins = [
+                {'ticker': 'KRW-BTC', 'korean_name': '비트코인'},
+                {'ticker': 'KRW-ETH', 'korean_name': '이더리움'},
+                {'ticker': 'KRW-XRP', 'korean_name': '리플'},
+                {'ticker': 'KRW-ADA', 'korean_name': '에이다'},
+                {'ticker': 'KRW-DOGE', 'korean_name': '도지코인'},
+                {'ticker': 'KRW-SOL', 'korean_name': '솔라나'},
+                {'ticker': 'KRW-DOT', 'korean_name': '폴카닷'},
+                {'ticker': 'KRW-AVAX', 'korean_name': '아발란체'}
+            ]
+            
+            return json.dumps({
+                "success": True, 
+                "message": "거래 가능한 코인 8개를 찾았습니다. (데모 모드)",
+                "coins": demo_coins,
+                "portfolio": demo_portfolio,
+                "is_demo": True
+            }, ensure_ascii=False)
+            
     except Exception as e:
-        log_error(e, f"{function_name} 함수 실행 중 오류 발생")
-        # 기본 샘플 데이터 반환
-        sample_data = [
-            {'ticker': 'KRW-BTC', 'korean_name': '비트코인', 'english_name': 'Bitcoin'},
-            {'ticker': 'KRW-ETH', 'korean_name': '이더리움', 'english_name': 'Ethereum'},
-            {'ticker': 'KRW-XRP', 'korean_name': '리플', 'english_name': 'Ripple'}
-        ]
-        return json.dumps(sample_data, ensure_ascii=False)
+        log_error(e, "get_available_coins 함수 실행 중 오류")
+        return json.dumps({
+            "success": False,
+            "message": f"코인 목록 조회 중 오류 발생: {str(e)}",
+            "coins": []
+        }, ensure_ascii=False)
 
 async def get_coin_price_info_func(ctx, args):
     """
-    특정 코인의 현재 가격 및 보유 수량 정보를 조회합니다.
+    코인 가격 정보를 조회합니다.
+    ticker: 코인 티커 (예: 'BTC')
     """
-    function_name = "get_coin_price_info"
-    log_info(f"{function_name} 함수 호출", {"args": args})
+    log_info("get_coin_price_info 함수 호출")
+    
+    # args가 문자열인 경우 파싱
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except:
+            error_msg = "매개변수 형식이 잘못되었습니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+    
+    # 티커 추출
+    ticker = args.get("ticker", "").upper()
+    
+    # 티커가 없으면 오류
+    if not ticker:
+        error_msg = "티커(ticker) 값이 필요합니다."
+        log_error(None, error_msg, show_tb=False)
+        return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+    
+    # KRW 프리픽스 추가
+    if not ticker.startswith("KRW-"):
+        ticker = f"KRW-{ticker}"
+    
+    log_info("get_coin_price_info: 티커 파싱 완료", {"ticker": ticker})
     
     try:
-        args_dict = json.loads(args)
-        ticker = args_dict.get('ticker', '')
-        log_info(f"{function_name}: 티커 파싱 완료", {"ticker": ticker})
-        
-        st.write(f"{ticker} 가격 및 수량 정보를 불러오는 중...")
-        upbit_trade = get_upbit_trade_instance()
-        
-        if not ticker.startswith('KRW-'):
-            old_ticker = ticker
-            ticker = f"KRW-{ticker}"
-            log_info(f"{function_name}: 티커 형식 변환", {"old": old_ticker, "new": ticker})
-            
-        coin_name = ticker.split('-')[1]
-        
-        if upbit_trade and upbit_trade.is_valid:
-            log_info(f"{function_name}: 유효한 Upbit 인스턴스 확인, 실제 데이터 조회 시도")
-            # 현재가 조회
-            current_price = upbit_trade.get_current_price(ticker)
-            log_info(f"{function_name}: 현재가 조회 결과", {"ticker": ticker, "price": current_price})
-            
-            # 보유수량 조회
-            coin_balance = upbit_trade.get_balance(coin_name)
-            krw_balance = upbit_trade.get_balance("KRW")
-            log_info(f"{function_name}: 잔고 조회 결과", {"coin": coin_name, "balance": coin_balance, "krw": krw_balance})
-            
-            # 일봉 데이터로 24시간 변동률 계산
-            try:
-                ohlcv = upbit_trade.get_ohlcv(ticker, interval="day", count=2)
-                log_info(f"{function_name}: OHLCV 데이터 조회 성공")
-                
-                if ohlcv is not None and len(ohlcv) > 0:
-                    prev_close = ohlcv.iloc[-2]['close'] if len(ohlcv) > 1 else ohlcv.iloc[0]['open']
-                    change_rate = ((current_price - prev_close) / prev_close) * 100 if prev_close > 0 else 0
-                    
-                    result = {
-                        'ticker': ticker,
-                        'coin_name': coin_name,
-                        'current_price': current_price,
-                        'change_rate_24h': round(change_rate, 2),
-                        'coin_balance': coin_balance,
-                        'coin_balance_krw': coin_balance * current_price if coin_balance and current_price else 0,
-                        'available_krw': krw_balance
-                    }
-                    log_info(f"{function_name}: 성공", {"result": result})
-                    return json.dumps(result, ensure_ascii=False)
-            except Exception as ohlcv_err:
-                log_error(ohlcv_err, f"{function_name}: OHLCV 데이터 조회 실패", show_tb=False)
-        
-        # API 키가 없거나 유효하지 않은 경우 샘플 데이터 반환
-        log_info(f"{function_name}: API 키 없음 또는 API 호출 실패, 샘플 데이터 사용")
-        sample_prices = {
-            'KRW-BTC': 50000000,
-            'KRW-ETH': 3000000,
-            'KRW-XRP': 500,
-            'KRW-SOL': 150000,
-            'KRW-DOGE': 100
-        }
-        
-        current_price = sample_prices.get(ticker, 1000)
-        change_rate = 2.5 if ticker == 'KRW-BTC' else -1.2 if ticker == 'KRW-ETH' else 0.8
-        
-        result = {
-            'ticker': ticker,
-            'coin_name': coin_name,
-            'current_price': current_price,
-            'change_rate_24h': change_rate,
-            'coin_balance': 0.01 if ticker == 'KRW-BTC' else 0.5 if ticker == 'KRW-ETH' else 0,
-            'coin_balance_krw': 0.01 * current_price if ticker == 'KRW-BTC' else 0.5 * current_price if ticker == 'KRW-ETH' else 0,
-            'available_krw': 1000000
-        }
-        return json.dumps(result, ensure_ascii=False)
-        
-    except Exception as e:
-        log_error(e, f"{function_name} 함수 실행 중 오류 발생")
-        
-        # 기본 오류 응답
+        # pyupbit 사용하여 데이터 조회
         try:
-            coin_name = ticker.split('-')[1] if 'ticker' in locals() else "unknown"
-        except:
-            coin_name = "unknown"
+            import pyupbit
             
-        result = {
-            'ticker': ticker if 'ticker' in locals() else "unknown",
-            'coin_name': coin_name,
-            'current_price': 0,
-            'change_rate_24h': 0,
-            'coin_balance': 0,
-            'coin_balance_krw': 0,
-            'available_krw': 0,
-            'error': str(e)
-        }
-        return json.dumps(result, ensure_ascii=False)
+            # 현재가 조회
+            current_price = pyupbit.get_current_price(ticker)
+            log_info("get_coin_price_info: 현재가 조회 결과", {"price": current_price})
+            
+            # 보유량 조회
+            upbit = get_upbit_instance()
+            balance_info = {"balance": 0, "avg_buy_price": 0}
+            
+            if upbit:
+                coin_currency = ticker.replace("KRW-", "")
+                balances = upbit.get_balances()
+                for balance in balances:
+                    if balance['currency'] == coin_currency:
+                        balance_info = {
+                            "balance": float(balance['balance']),
+                            "avg_buy_price": float(balance['avg_buy_price'])
+                        }
+                        break
+            
+            log_info("get_coin_price_info: 잔고 조회 결과", balance_info)
+            
+            # 일봉 데이터 조회
+            df = pyupbit.get_ohlcv(ticker, interval="day", count=7)
+            log_info("get_coin_price_info: OHLCV 데이터 조회 성공")
+            
+            # 데이터 포맷팅
+            ohlcv_data = []
+            for idx, row in df.iterrows():
+                ohlcv_data.append({
+                    "date": idx.strftime("%Y-%m-%d"),
+                    "open": float(row['open']),
+                    "high": float(row['high']),
+                    "low": float(row['low']),
+                    "close": float(row['close']),
+                    "volume": float(row['volume'])
+                })
+            
+            # 데이터 조합
+            result = {
+                "success": True,
+                "ticker": ticker,
+                "current_price": current_price,
+                "balance_info": balance_info,
+                "ohlcv_data": ohlcv_data
+            }
+            
+            log_info("get_coin_price_info: 성공")
+            return json.dumps(result, ensure_ascii=False)
+            
+        except Exception as e:
+            error_msg = f"코인 가격 정보 조회 중 오류 발생: {str(e)}"
+            log_error(e, error_msg)
+            return json.dumps({"success": False, "message": error_msg, "ticker": ticker}, ensure_ascii=False)
+            
+    except Exception as e:
+        error_msg = f"코인 가격 정보 조회 중 예상치 못한 오류: {str(e)}"
+        log_error(e, error_msg)
+        return json.dumps({"success": False, "message": error_msg, "ticker": ticker}, ensure_ascii=False)
 
 async def buy_coin_func(ctx, args):
     """
-    특정 코인을 구매합니다. 시장가 또는 지정가 매수 주문을 실행합니다.
+    코인 매수 함수
+    ticker: 코인 티커 (예: 'BTC')
+    price_type: 'market' 또는 'limit'
+    amount: 매수량 (원화)
+    limit_price: 지정가 주문 시 가격
     """
-    function_name = "buy_coin"
-    log_info(f"{function_name} 함수 호출", {"args": args})
-    
     try:
-        args_dict = json.loads(args)
-        ticker = args_dict.get('ticker', '')
-        price = args_dict.get('price')
-        amount = args_dict.get('amount')
+        # 로깅 시작
+        log_info(f"buy_coin 함수 호출", {"args": args})
+        print(f"매수 함수 호출: {args}")
         
-        log_info(f"{function_name}: 파라미터 파싱 완료", {"ticker": ticker, "price": price, "amount": amount})
+        # args가 문자열인 경우 JSON으로 파싱
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError as e:
+                error_msg = f"매개변수 파싱 오류: {str(e)}"
+                log_error(e, error_msg)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
         
-        st.write(f"{ticker} 매수 주문을 실행하는 중...")
-        upbit_trade = get_upbit_trade_instance()
+        # 인자 파싱
+        parsed_args = {}
+        parsed_args["ticker"] = args.get("ticker", "").upper()
+        parsed_args["price_type"] = args.get("price_type", "market").lower()
+        parsed_args["amount"] = float(args.get("amount", 0))
+        parsed_args["limit_price"] = float(args.get("limit_price", 0)) if args.get("limit_price") else None
         
-        if not ticker.startswith('KRW-'):
-            old_ticker = ticker
+        log_info(f"buy_coin: 파라미터 파싱 완료", parsed_args)
+        
+        # 티커 검증
+        if not parsed_args["ticker"]:
+            error_msg = "티커(ticker)가 지정되지 않았습니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # KRW 마켓 프리픽스가 없으면 추가
+        ticker = parsed_args["ticker"]
+        if not ticker.startswith("KRW-"):
             ticker = f"KRW-{ticker}"
-            log_info(f"{function_name}: 티커 형식 변환", {"old": old_ticker, "new": ticker})
+        log_info(f"buy_coin: 코인명 추출", {"ticker": ticker})
+        
+        # upbit 인스턴스 가져오기
+        upbit = get_upbit_instance()
+        if not upbit:
+            error_msg = "Upbit API 인스턴스를 생성할 수 없습니다. API 키 설정을 확인하세요."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        log_info(f"buy_coin: 유효한 Upbit 인스턴스 확인")
+        
+        # 주문 유형 확인
+        price_type = parsed_args["price_type"]
+        if price_type not in ["market", "limit"]:
+            error_msg = f"지원하지 않는 주문 유형: {price_type}. 'market' 또는 'limit'만 사용할 수 있습니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # 금액 검증
+        amount = parsed_args["amount"]
+        if amount <= 0:
+            error_msg = f"유효하지 않은 매수 금액: {amount}. 양수여야 합니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # 전량 매수 여부 확인 (계좌의 원화 잔고와 동일한 경우)
+        krw_balance = 0
+        try:
+            balances = upbit.get_balances()
+            for balance in balances:
+                if balance['currency'] == 'KRW':
+                    krw_balance = float(balance['balance'])
+                    break
             
-        # amount가 None이면 기본값 설정
-        if amount is None:
-            amount = 0
-            log_info(f"{function_name}: amount가 None, 0으로 설정")
-            
-        if upbit_trade and upbit_trade.is_valid:
-            log_info(f"{function_name}: 유효한 Upbit 인스턴스 확인")
-            # KRW 잔고 확인
-            krw_balance = upbit_trade.get_balance("KRW")
-            log_info(f"{function_name}: KRW 잔고 조회", {"balance": krw_balance})
-            
-            if amount <= 0:
-                log_info(f"{function_name}: 주문 금액이 0 이하", {"amount": amount})
-                result = {
-                    'success': False,
-                    'message': f"주문 실패: 주문 금액은 0보다 커야 합니다.",
-                    'order_id': None
-                }
-                return json.dumps(result, ensure_ascii=False)
+            # 전량 매수로 판단되는 경우 (원화 잔고의 99% 이상 사용)
+            if amount >= krw_balance * 0.99:
+                # 수수료를 고려하여 99.95%만 사용
+                amount = krw_balance * 0.9995
+                log_info(f"buy_coin: 전량 매수로 판단됨. 수수료 고려하여 금액 조정", {"original": krw_balance, "adjusted": amount})
+        except Exception as e:
+            log_error(e, "buy_coin: 원화 잔고 확인 중 오류")
+            # 오류가 발생해도 계속 진행 (조정 없이)
+        
+        order_type = None
+        order_result = None
+        
+        # 마켓 주문과 리밋 주문의 분리 처리
+        if price_type == "market":
+            log_info(f"buy_coin: 시장가 매수 시도", {"ticker": ticker, "amount": amount})
+            print(f"시장가 매수 주문: {ticker}, {amount}KRW")
+            order_type = "시장가"
+            try:
+                order_result = upbit.buy_market_order(ticker, amount)
+                log_info(f"buy_coin: 주문 결과", {"result": order_result})
+            except Exception as e:
+                error_msg = f"시장가 매수 중 오류 발생: {str(e)}"
+                log_error(e, error_msg)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
                 
-            if krw_balance < amount and price is None:
-                log_info(f"{function_name}: 잔고 부족", {"krw_balance": krw_balance, "amount": amount})
-                result = {
-                    'success': False,
-                    'message': f"주문 실패: 주문 금액({amount}원)이 보유 KRW({krw_balance}원)보다 큽니다.",
-                    'order_id': None
-                }
-                return json.dumps(result, ensure_ascii=False)
+        else:  # limit order
+            limit_price = parsed_args["limit_price"]
+            if not limit_price or limit_price <= 0:
+                error_msg = "지정가 주문에는 유효한 'limit_price'가 필요합니다."
+                log_error(None, error_msg, show_tb=False)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
             
-            # 시장가 주문 실행
-            if price is None:
-                log_info(f"{function_name}: 시장가 매수 시도", {"ticker": ticker, "amount": amount})
-                order_result = upbit_trade.buy_market_order(ticker, amount)
-                order_type = "시장가"
-            else:
-                # 지정가 주문 실행
-                log_info(f"{function_name}: 지정가 매수 시도", {"ticker": ticker, "price": price, "amount": amount})
-                order_result = upbit_trade.buy_limit_order(ticker, price, amount)
-                order_type = "지정가"
+            # 수량 계산 (금액 / 지정가)
+            volume = amount / limit_price
             
-            log_info(f"{function_name}: 주문 결과", {"result": order_result})
-            
-            if order_result and 'uuid' in order_result:
-                result = {
-                    'success': True,
-                    'message': f"{ticker} {order_type} 매수 주문이 접수되었습니다. 주문 ID: {order_result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
-                    'order_id': order_result['uuid'],
-                    'order_info': order_result
-                }
-                return json.dumps(result, ensure_ascii=False)
-            else:
-                result = {
-                    'success': False,
-                    'message': f"{ticker} {order_type} 매수 주문 실패: {order_result}",
-                    'order_id': None
-                }
-                return json.dumps(result, ensure_ascii=False)
+            log_info(f"buy_coin: 지정가 매수 시도", {"ticker": ticker, "price": limit_price, "volume": volume})
+            print(f"지정가 매수 주문: {ticker}, 가격: {limit_price}KRW, 수량: {volume}")
+            order_type = "지정가"
+            try:
+                order_result = upbit.buy_limit_order(ticker, limit_price, volume)
+                log_info(f"buy_coin: 주문 결과", {"result": order_result})
+            except Exception as e:
+                error_msg = f"지정가 매수 중 오류 발생: {str(e)}"
+                log_error(e, error_msg)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
         
-        # API 키가 없거나 유효하지 않은 경우
-        log_info(f"{function_name}: API 키 없음 또는 유효하지 않음")
-        result = {
-            'success': False,
-            'message': "API 키가 설정되지 않았거나 유효하지 않습니다. API 설정 페이지에서 키를 확인해주세요.",
-            'order_id': None,
-            'is_demo': True
-        }
-        return json.dumps(result, ensure_ascii=False)
-        
+        # 주문 결과 반환
+        if order_result and 'uuid' in order_result:
+            result = {
+                'success': True,
+                'message': f"{ticker} {order_type} 매수 주문이 접수되었습니다. 주문 ID: {order_result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
+                'order_id': order_result['uuid'],
+                'order_info': order_result
+            }
+            return json.dumps(result, ensure_ascii=False)
+        else:
+            error_msg = f"주문은 성공했으나 주문 ID를 받지 못했습니다.: {order_result}"
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+            
     except Exception as e:
-        log_error(e, f"{function_name} 함수 실행 중 오류 발생")
-        result = {
-            'success': False,
-            'message': f"주문 중 오류 발생: {str(e)}",
-            'order_id': None
-        }
-        return json.dumps(result, ensure_ascii=False)
+        error_msg = f"매수 주문 중 예기치 않은 오류 발생: {str(e)}"
+        log_error(e, error_msg)
+        return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
 
 async def sell_coin_func(ctx, args):
     """
-    특정 코인을 판매합니다. 시장가 또는 지정가 매도 주문을 실행합니다.
+    코인 매도 함수
+    ticker: 코인 티커 (예: 'BTC')
+    price_type: 'market' 또는 'limit'
+    amount: 매도량 (코인 수량)
+    limit_price: 지정가 주문 시 가격
     """
-    function_name = "sell_coin"
-    log_info(f"{function_name} 함수 호출", {"args": args})
-    
     try:
-        args_dict = json.loads(args)
-        ticker = args_dict.get('ticker', '')
-        price = args_dict.get('price')
-        amount = args_dict.get('amount')
+        # 로깅 시작
+        log_info(f"sell_coin 함수 호출", {"args": args})
+        print(f"매도 함수 호출: {args}")
         
-        log_info(f"{function_name}: 파라미터 파싱 완료", {"ticker": ticker, "price": price, "amount": amount})
+        # args가 문자열인 경우 JSON으로 파싱
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError as e:
+                error_msg = f"매개변수 파싱 오류: {str(e)}"
+                log_error(e, error_msg)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
         
-        st.write(f"{ticker} 매도 주문을 실행하는 중...")
-        upbit_trade = get_upbit_trade_instance()
+        # 인자 파싱
+        parsed_args = {}
+        parsed_args["ticker"] = args.get("ticker", "").upper()
+        parsed_args["price_type"] = args.get("price_type", "market").lower()
+        parsed_args["amount"] = args.get("amount", "")
+        parsed_args["limit_price"] = float(args.get("limit_price", 0)) if args.get("limit_price") else None
         
-        if not ticker.startswith('KRW-'):
-            old_ticker = ticker
+        log_info(f"sell_coin: 파라미터 파싱 완료", parsed_args)
+        
+        # 티커 검증
+        if not parsed_args["ticker"]:
+            error_msg = "티커(ticker)가 지정되지 않았습니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # KRW 마켓 프리픽스가 없으면 추가
+        ticker = parsed_args["ticker"]
+        if not ticker.startswith("KRW-"):
             ticker = f"KRW-{ticker}"
-            log_info(f"{function_name}: 티커 형식 변환", {"old": old_ticker, "new": ticker})
+        log_info(f"sell_coin: 코인명 추출", {"ticker": ticker})
         
-        coin_name = ticker.split('-')[1]
-        log_info(f"{function_name}: 코인명 추출", {"coin_name": coin_name})
-            
-        if upbit_trade and upbit_trade.is_valid:
-            log_info(f"{function_name}: 유효한 Upbit 인스턴스 확인")
-            # 보유 코인 수량 확인
-            coin_balance = upbit_trade.get_balance(coin_name)
-            log_info(f"{function_name}: 코인 잔고 조회", {"coin": coin_name, "balance": coin_balance})
-            
-            if coin_balance == 0:
-                log_info(f"{function_name}: 코인 잔고 없음", {"coin": coin_name})
-                result = {
-                    'success': False,
-                    'message': f"주문 실패: {coin_name} 보유 수량이 없습니다.",
-                    'order_id': None
-                }
-                return json.dumps(result, ensure_ascii=False)
-            
-            # 매도 수량이 지정되지 않았거나 보유량보다 많으면 보유량 전체로 설정
-            orig_amount = amount
-            if amount is None or amount > coin_balance:
-                amount = coin_balance
-                log_info(f"{function_name}: 매도 수량 조정", {"original": orig_amount, "adjusted": amount})
-            
-            # 시장가 주문 실행
-            if price is None:
-                log_info(f"{function_name}: 시장가 매도 시도", {"ticker": ticker, "amount": amount})
-                order_result = upbit_trade.sell_market_order(ticker, amount)
-                order_type = "시장가"
-            else:
-                # 지정가 주문 실행
-                log_info(f"{function_name}: 지정가 매도 시도", {"ticker": ticker, "price": price, "amount": amount})
-                order_result = upbit_trade.sell_limit_order(ticker, price, amount)
-                order_type = "지정가"
-            
-            log_info(f"{function_name}: 주문 결과", {"result": order_result})
-            
-            if order_result and 'uuid' in order_result:
-                result = {
-                    'success': True,
-                    'message': f"{ticker} {order_type} 매도 주문이 접수되었습니다. 주문 ID: {order_result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
-                    'order_id': order_result['uuid'],
-                    'order_info': order_result
-                }
-                return json.dumps(result, ensure_ascii=False)
-            else:
-                result = {
-                    'success': False,
-                    'message': f"{ticker} {order_type} 매도 주문 실패: {order_result}",
-                    'order_id': None
-                }
-                return json.dumps(result, ensure_ascii=False)
+        # upbit 인스턴스 가져오기
+        upbit = get_upbit_instance()
+        if not upbit:
+            error_msg = "Upbit API 인스턴스를 생성할 수 없습니다. API 키 설정을 확인하세요."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        log_info(f"sell_coin: 유효한 Upbit 인스턴스 확인")
         
-        # API 키가 없거나 유효하지 않은 경우
-        log_info(f"{function_name}: API 키 없음 또는 유효하지 않음")
-        result = {
-            'success': False,
-            'message': "API 키가 설정되지 않았거나 유효하지 않습니다. API 설정 페이지에서 키를 확인해주세요.",
-            'order_id': None,
-            'is_demo': True
-        }
-        return json.dumps(result, ensure_ascii=False)
+        # 주문 유형 확인
+        price_type = parsed_args["price_type"]
+        if price_type not in ["market", "limit"]:
+            error_msg = f"지원하지 않는 주문 유형: {price_type}. 'market' 또는 'limit'만 사용할 수 있습니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
         
+        # 보유량 확인 - 포트폴리오 기준으로 확인
+        coin_currency = ticker.replace("KRW-", "")
+        coin_balance = 0
+        try:
+            balances = upbit.get_balances()
+            for balance in balances:
+                if balance['currency'] == coin_currency:
+                    coin_balance = float(balance['balance'])
+                    break
+            
+            log_info(f"sell_coin: 코인 잔고 조회", {"ticker": ticker, "balance": coin_balance})
+            
+            if coin_balance <= 0:
+                error_msg = f"{coin_currency} 코인을 보유하고 있지 않습니다. 매도할 수 없습니다."
+                log_error(None, error_msg, show_tb=False)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        except Exception as e:
+            error_msg = f"코인 잔고 조회 중 오류 발생: {str(e)}"
+            log_error(e, error_msg)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # 수량 파싱
+        amount = parsed_args["amount"]
+        amount_value = None
+        
+        # 전체 수량 매도인 경우
+        if isinstance(amount, str) and amount.lower() in ["all", "전체", "전량"]:
+            amount_value = coin_balance
+            log_info(f"sell_coin: 전체 매도 요청", {"coin_balance": coin_balance})
+        else:
+            try:
+                amount_value = float(amount)
+                # 보유량보다 많은 경우 오류
+                if amount_value > coin_balance:
+                    error_msg = f"매도 수량({amount_value})이 보유량({coin_balance})보다 많습니다."
+                    log_error(None, error_msg, show_tb=False)
+                    return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+            except ValueError:
+                error_msg = f"유효하지 않은 매도 수량: {amount}. 숫자 또는 'all'로 지정해주세요."
+                log_error(None, error_msg, show_tb=False)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # 유효한 수량인지 확인
+        if amount_value <= 0:
+            error_msg = f"유효하지 않은 매도 수량: {amount_value}. 양수여야 합니다."
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        order_type = None
+        order_result = None
+        
+        # 마켓 주문과 리밋 주문의 분리 처리
+        if price_type == "market":
+            log_info(f"sell_coin: 시장가 매도 시도", {"ticker": ticker, "amount": amount_value})
+            print(f"시장가 매도 주문: {ticker}, {amount_value}BTC")
+            order_type = "시장가"
+            try:
+                order_result = upbit.sell_market_order(ticker, amount_value)
+                log_info(f"sell_coin: 주문 결과", {"result": order_result})
+            except Exception as e:
+                error_msg = f"시장가 매도 중 오류 발생: {str(e)}"
+                log_error(e, error_msg)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+                
+        else:  # limit order
+            limit_price = parsed_args["limit_price"]
+            if not limit_price or limit_price <= 0:
+                error_msg = "지정가 주문에는 유효한 'limit_price'가 필요합니다."
+                log_error(None, error_msg, show_tb=False)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+            
+            log_info(f"sell_coin: 지정가 매도 시도", {"ticker": ticker, "price": limit_price, "amount": amount_value})
+            print(f"지정가 매도 주문: {ticker}, 가격: {limit_price}KRW, 수량: {amount_value}")
+            order_type = "지정가"
+            try:
+                order_result = upbit.sell_limit_order(ticker, limit_price, amount_value)
+                log_info(f"sell_coin: 주문 결과", {"result": order_result})
+            except Exception as e:
+                error_msg = f"지정가 매도 중 오류 발생: {str(e)}"
+                log_error(e, error_msg)
+                return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+        
+        # 주문 결과 반환
+        if order_result and 'uuid' in order_result:
+            result = {
+                'success': True,
+                'message': f"{ticker} {order_type} 매도 주문이 접수되었습니다. 주문 ID: {order_result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
+                'order_id': order_result['uuid'],
+                'order_info': order_result
+            }
+            return json.dumps(result, ensure_ascii=False)
+        else:
+            error_msg = f"주문은 성공했으나 주문 ID를 받지 못했습니다.: {order_result}"
+            log_error(None, error_msg, show_tb=False)
+            return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
+            
     except Exception as e:
-        log_error(e, f"{function_name} 함수 실행 중 오류 발생")
-        result = {
-            'success': False,
-            'message': f"주문 중 오류 발생: {str(e)}",
-            'order_id': None
-        }
-        return json.dumps(result, ensure_ascii=False)
+        error_msg = f"매도 주문 중 예기치 않은 오류 발생: {str(e)}"
+        log_error(e, error_msg)
+        return json.dumps({"success": False, "message": error_msg}, ensure_ascii=False)
 
 async def check_order_status_func(ctx, args):
     """
@@ -660,7 +899,7 @@ async def toggle_debug_mode_func(ctx, args):
         environment_info = {
             'python_version': sys.version,
             'streamlit_version': st.__version__,
-            'upbit_api_available': get_upbit_trade_instance() is not None,
+            'upbit_api_available': get_upbit_instance() is not None,
             'debug_mode': st.session_state.get('debug_mode', False),
             'session_keys': list(st.session_state.keys()),
         }
@@ -826,6 +1065,8 @@ def create_agent(model_options):
     4. 코인 매도 전에 get_coin_price_info 함수를 호출하여 보유량을 확인하세요.
     5. 매수 주문 시에는 사용자의 위험 성향을 고려하여 적절한 금액을 추천하세요.
     6. 매수/매도 주문 후에는 "상태: 대기 중"과 같은 메시지를 표시하지 말고, 대신 "주문이 접수되었습니다. '거래내역' 탭에서 주문 완료 여부를 확인하실 수 있습니다."와 같은 안내 메시지를 제공하세요.
+    7. 전량 매수를 요청받은 경우, 수수료(0.05%)를 고려하여 실제 주문 금액을 계산하세요. 총액의 99.95%로 주문하면 수수료 고려 후 정확하게 전액 사용이 가능합니다.
+    8. 매도가능한 코인을 안내할 때는 반드시 '포트폴리오' 기준으로 판단하세요. 거래가능코인목록이 아닌 실제 보유 중인 코인만 매도 가능합니다.
 
     특정 기능을 사용할 때마다 어떤 기능을 사용하는지 사용자에게 알려주세요.
     예를 들어, "거래 가능한 코인 목록을 불러오겠습니다." 등의 메시지를 먼저 표시합니다.

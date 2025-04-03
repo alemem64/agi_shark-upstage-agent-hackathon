@@ -35,34 +35,51 @@ def show_sidebar():
         if not st.session_state.get('openai_api_key') and not st.session_state.get('anthropic_api_key'):
             st.warning("⚠️ API 키가 설정되지 않았습니다. 'API 설정' 탭에서 API 키를 설정해주세요.")
 
-        # 채팅 메시지 표시
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"], unsafe_allow_html=True)
+        # 채팅 메시지를 하나의 컨테이너에 표시
+        chat_container = st.container()
+        
+        with chat_container:
+            # 채팅 메시지 표시
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"], unsafe_allow_html=True)
 
-        # 자동 스크롤 JavaScript 추가
+        # 스크롤 자동화를 위한 JavaScript
         st.markdown("""
         <script>
-            function scrollToBottom() {
+            // 채팅 컨테이너 스크롤 함수
+            function scrollChatToBottom() {
                 const chatContainer = document.querySelector('[data-testid="stChatContainer"]');
                 if (chatContainer) {
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
             }
             
-            // 페이지 로드 시 및 DOM 변경 시 스크롤
-            window.addEventListener('load', scrollToBottom);
-            const observer = new MutationObserver(scrollToBottom);
-            const chatContainer = document.querySelector('[data-testid="stChatContainer"]');
-            if (chatContainer) {
-                observer.observe(chatContainer, { childList: true, subtree: true });
-            }
+            // 페이지 로드 시 스크롤
+            window.addEventListener('load', scrollChatToBottom);
+            
+            // DOM 변경 감지 시 스크롤
+            const chatObserver = new MutationObserver(scrollChatToBottom);
+            
+            // 페이지 로드 후 컨테이너 관찰 시작
+            window.addEventListener('load', function() {
+                const chatContainer = document.querySelector('[data-testid="stChatContainer"]');
+                if (chatContainer) {
+                    chatObserver.observe(chatContainer, { 
+                        childList: true, 
+                        subtree: true,
+                        characterData: true 
+                    });
+                }
+            });
+            
+            // 0.5초마다 강제 스크롤 - 다른 방법이 실패할 경우를 대비
+            setInterval(scrollChatToBottom, 500);
         </script>
         """, unsafe_allow_html=True)
         
-        # 채팅 입력 및 파일 업로드
+        # 파일 업로드 및 채팅 입력
         uploaded_file = st.file_uploader("문서 업로드 (선택사항)", type=["pdf", "txt", "docx"], key="chat_file_uploader")
-        
         user_prompt = st.chat_input("어떻게 투자할까요?")
         
         if user_prompt:
