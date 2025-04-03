@@ -11,8 +11,8 @@ from typing import Dict, List, Optional, Any
 import os
 
 from openai.types.responses import ResponseTextDeltaEvent
-from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool
-from tools.document_parser.document_parser import DocumentParser, FunctionTool
+from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool, FunctionTool
+from tools.document_parser.document_parser import DocumentParser
 
 # UpbitTrader를 직접 가져옵니다
 try:

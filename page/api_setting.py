@@ -239,7 +239,7 @@ def show_api_settings():
     X_bearer_token = st.text_input("X bearer API 키 (선택)", value=st.session_state.X_bearer_token, type="password")
 
     if st.button("저장하기", type="primary"):
-        save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key)
+        save_api_keys(openai_key, anthropic_key, upbit_access_key, upbit_secret_key, upstage_api_key, X_bearer_token)
         
         # API 키 테스트
         if upbit_access_key and upbit_secret_key:
