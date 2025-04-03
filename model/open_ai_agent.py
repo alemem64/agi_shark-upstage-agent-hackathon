@@ -100,6 +100,30 @@ def create_agent(model_options):
     risk_style = st.session_state.get('risk_style', '공격적')
     period_style = st.session_state.get('period_style', '단기')
     
+    # 포트폴리오 정보 가져오기
+    portfolio_info = ""
+    try:
+        from page.portfolio import get_portfolio_info_from_trade
+        from page.api_setting import get_upbit_trade_instance
+        
+        upbit_trade = get_upbit_trade_instance()
+        if upbit_trade:
+            portfolio_summary, coin_balances = get_portfolio_info_from_trade(upbit_trade)
+            if portfolio_summary:
+                portfolio_info += "\n\n# 사용자 포트폴리오 정보\n"
+                portfolio_info += f"- 총 보유자산: {portfolio_summary.get('총보유자산', 0):,.0f} KRW\n"
+                portfolio_info += f"- 총 평가손익: {portfolio_summary.get('총평가손익', 0):,.0f} KRW ({portfolio_summary.get('총수익률', 0):.2f}%)\n"
+                portfolio_info += f"- 일평가수익률: {portfolio_summary.get('일평가수익률', 0):.2f}%\n"
+                portfolio_info += f"- 보유 현금: {portfolio_summary.get('보유현금', 0):,.0f} KRW\n"
+                portfolio_info += f"- 코인 평가금액: {portfolio_summary.get('코인평가금액', 0):,.0f} KRW\n"
+                
+                if not coin_balances.empty:
+                    portfolio_info += "\n## 보유 코인 목록\n"
+                    for idx, row in coin_balances.iterrows():
+                        portfolio_info += f"- {row['코인']}: {row['수량']:.8f} 개, 평가금액: {row['평가금액']:,.0f} KRW, 수익률: {row['수익률']:.2f}%\n"
+    except Exception as e:
+        print(f"포트폴리오 정보 로딩 중 오류: {str(e)}")
+    
     # 현재 날짜와 시간 정보 생성
     current_datetime = datetime.datetime.now()
     current_date_str = current_datetime.strftime("%Y년 %m월 %d일")
@@ -186,6 +210,8 @@ def create_agent(model_options):
         사용자 맞춤 지시: {user_requirement}
         위험 성향: {risk_style}
         기간 성향: {period_style}
+        
+        {portfolio_info}
         
         {auto_trader_info}
 
