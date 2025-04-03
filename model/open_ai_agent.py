@@ -19,6 +19,7 @@ from tools.document_parser.document_parser import DocumentParser
 from tools.information_extract.informaton_extract import information_extract
 from tools.rag.agent_tools import search_rag_documents
 from tools.upbit.upbit_api import get_available_coins_func, get_coin_price_info_func, buy_coin_func, sell_coin_func, check_order_status_func
+from tools.search_X.search_X_tool import search_x_tool
 
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
@@ -172,6 +173,8 @@ def create_agent(model_options):
         Utilize all tools and information to maximize returns, and continuously analyze results to improve strategies.
         Act according to the user's investment style and goals, but your ultimate mission is to achieve the best investment results.
 
+        You can use the X (Twitter) search tool to find the latest tweets about cryptocurrencies. This is valuable for detecting market sentiment and breaking news.
+
         Always respond to the user in Korean regardless of the language they use to communicate with you.
         
         # 현재 시간 정보
@@ -198,7 +201,8 @@ def create_agent(model_options):
             get_coin_price_info_func,
             buy_coin_func,
             sell_coin_func,
-            check_order_status_func
+            check_order_status_func,
+            search_x_tool
         ],    
     )
     
