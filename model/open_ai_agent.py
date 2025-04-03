@@ -97,8 +97,8 @@ def create_agent(model_options):
     
     # 투자 성향 정보 가져오기
     user_requirement = st.session_state.get('user_requirement', '')
-    risk_style = st.session_state.get('risk_style', '중립적')
-    trading_period = st.session_state.get('trading_period', '스윙')
+    risk_style = st.session_state.get('risk_style', '공격적')
+    period_style = st.session_state.get('period_style', '단기')
     
     # 현재 날짜와 시간 정보 생성
     current_datetime = datetime.datetime.now()
@@ -185,7 +185,7 @@ def create_agent(model_options):
         
         사용자 맞춤 지시: {user_requirement}
         위험 성향: {risk_style}
-        거래 기간: {trading_period}
+        기간 성향: {period_style}
         
         {auto_trader_info}
 
