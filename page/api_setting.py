@@ -74,6 +74,9 @@ def init_api_session_state():
         st.session_state.upstage_api_key = stored_keys.get('upstage_api_key', "")
     if 'X_bearer_token' not in st.session_state:
         st.session_state.X_bearer_token = stored_keys.get('X_bearer_token', "")
+    # X_bearer_token을 twitter_bearer_token으로도 저장 (search_X 클래스 호환용)
+    if 'twitter_bearer_token' not in st.session_state:
+        st.session_state.twitter_bearer_token = stored_keys.get('X_bearer_token', "")
     # API 경고 메시지가 이미 표시되었는지 추적하는 플래그 추가
     if 'api_warning_shown' not in st.session_state:
         st.session_state.api_warning_shown = False
@@ -115,6 +118,8 @@ def save_api_keys(openai_key, upbit_access_key, upbit_secret_key, upstage_api_ke
     st.session_state.upbit_secret_key = upbit_secret_key
     st.session_state.upstage_api_key = upstage_api_key
     st.session_state.X_bearer_token = X_bearer_token
+    # X_bearer_token을 twitter_bearer_token으로도 저장 (search_X 클래스 호환용)
+    st.session_state.twitter_bearer_token = X_bearer_token
     
     # 파일에 저장
     api_keys = {
