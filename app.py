@@ -15,15 +15,11 @@ from page.trade_market import show_trade_market
 from page.trade_strategy import show_trade_strategy
 from page.portfolio import show_portfolio
 from page.trade_history import show_trade_history
-from page.api_setting import show_api_settings, init_api_session_state
+from page.api_setting import show_api_settings
 
+from init import init_app
 
-# 세션 상태 초기화
-init_api_session_state()
-
-# 채팅 기록 초기화
-if 'messages' not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 투자에 관해 무엇을 도와드릴까요?"}]
+init_app()
 
 # 사이드바 표시
 with st.sidebar:

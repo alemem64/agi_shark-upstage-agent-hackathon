@@ -1,9 +1,19 @@
 import requests
 import streamlit as st
 
+# 전역 변수
+_UPSTAGE_API_KEY = None
+
+def update_upstage_api_key():
+    """전역 Upstage API 키 업데이트"""
+    global _UPSTAGE_API_KEY
+    _UPSTAGE_API_KEY = st.session_state.get('upstage_api_key', '')
+    print(f"Upstage API 키 업데이트: {'설정됨' if _UPSTAGE_API_KEY else '없음'}")
+
 class DocumentParser:
-    def __init__(self):
-        self.api_key = st.session_state.upstage_api_key
+    def __init__(self, api_key=None):
+        # API 키 우선순위: 생성자 파라미터 > 전역 변수 > 세션 상태
+        self.api_key = api_key if api_key is not None else (_UPSTAGE_API_KEY or st.session_state.get('upstage_api_key', ''))
         self.url = "https://api.upstage.ai/v1/document-ai/document-parse"
         
     def parse_document(self, file_content, file_name):

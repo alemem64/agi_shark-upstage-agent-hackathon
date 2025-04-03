@@ -4,6 +4,8 @@ import fitz  # PyMuPDF
 from PIL import Image
 import io
 import base64
+from tools.rag.document_processor import process_uploaded_file
+from tools.rag.rag import delete_from_vector_store, async_process
 
 def get_pdf_display(pdf_path):
     """PDF 파일의 첫 페이지를 이미지로 변환"""
@@ -29,11 +31,22 @@ def get_pdf_download_link(pdf_path):
 def delete_pdf(file_path, storage_dir):
     """PDF 파일 삭제"""
     try:
+        file_name = os.path.basename(file_path)
+        
+        # 파일 삭제
         os.remove(file_path)
+        
         # 삭제 상태를 세션 스테이트에 저장
         if 'deleted_files' not in st.session_state:
             st.session_state.deleted_files = set()
-        st.session_state.deleted_files.add(f"{storage_dir}_{os.path.basename(file_path)}")
+        st.session_state.deleted_files.add(f"{storage_dir}_{file_name}")
+        
+        # RAG 저장소인 경우 벡터 스토어에서도 삭제
+        if storage_dir == "tools/web2pdf/rag_doc_storage" and 'vector_store_id' in st.session_state:
+            # 벡터 스토어에서 삭제
+            async_process(delete_from_vector_store, file_name)
+            print(f"벡터 스토어에서 '{file_name}' 삭제 요청 시작")
+        
         return True
     except Exception as e:
         st.error(f"파일 삭제 중 오류 발생: {str(e)}")
@@ -50,6 +63,21 @@ def display_pdf_section(title, storage_dir):
             file_path = os.path.join(storage_dir, uploaded_file.name)
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getvalue())
+                
+            # RAG 문서 저장소인 경우, 자동으로 문서 처리
+            if storage_dir == "tools/web2pdf/rag_doc_storage":
+                # OpenAI API 키 확인
+                if not st.session_state.get('openai_key'):
+                    st.error("OpenAI API 키가 설정되지 않았습니다. API 설정 탭에서 키를 입력해주세요.")
+                else:
+                    # 비동기 처리 시작
+                    process_uploaded_file(file_path, uploaded_file.name)
+                    message = "업로드 완료. 문서가 RAG 시스템에 자동으로 추가되고 있습니다."
+                    if not st.session_state.get('upstage_api_key'):
+                        message += " (Upstage 파싱 없이 직접 업로드)"
+                    st.success(message)
+            else:
+                st.success(f"'{uploaded_file.name}' 파일이 업로드되었습니다.")
         except Exception as e:
             st.error(f"파일 업로드 중 오류 발생: {str(e)}")
     
@@ -92,6 +120,10 @@ def show_trade_strategy():
     rag_storage = "tools/web2pdf/rag_doc_storage"
     os.makedirs(pdf_storage, exist_ok=True)
     os.makedirs(rag_storage, exist_ok=True)
+    
+    # API 키 상태 확인 및 경고 표시
+    if not st.session_state.get('openai_key'):
+        st.warning("OpenAI API 키가 설정되지 않았습니다. RAG 문서 처리 기능을 사용하려면 API 설정 탭에서 키를 입력해주세요.")
     
     # 2개의 컬럼으로 나누기
     col1, col2 = st.columns(2)
