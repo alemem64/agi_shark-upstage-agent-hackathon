@@ -163,39 +163,15 @@ def show_sidebar():
             except ValueError:
                 st.error("재부팅 주기는 숫자로 입력해주세요.")
 
-            work_frequency = st.text_input("Agent 작동 주기 (초)", value="10")
             st.session_state.model_options = st.selectbox("LLM 모델 선택", ("gpt 4o mini", "claude 3 haiku", "claude 3.7 sonnet"))
-            toogle_col1, toogle_col2 = st.columns(2)
-            with toogle_col1:
-                toggle_web_search = st.toggle("웹 검색 참조", value=True)
-                toggle_see_prev_trade = st.toggle("이전 거래 내역 숙고", value=True)
-            with toogle_col2:
-                toggle_always_see_doc = st.toggle("항시 참조 문서", value=True)
-                toggle_see_rag_doc = st.toggle("RAG 문서 참조", value=True)
 
 
-        with st.expander("투자 성향", expanded=True):
-
+        with st.expander("사용자 요구사항", expanded=True):
             user_requirement = st.text_area("사용자 맞춤 지시", value="비트코인을 주로 투자하고 싶어")
             st.session_state['user_requirement'] = user_requirement
-            # 위험 성향 선택 시 세션 상태에 저장
-            risk_style = st.select_slider(
-                "위험 성향",
-                options=["보수적", "중립적", "공격적"],
-                value="중립적",
-            )
-            st.session_state['risk_style'] = risk_style
 
-            # 거래 기간 선택 시 세션 상태에 저장
-            trading_period = st.select_slider(
-                "거래 기간",
-                options=["단기", "스윙", "장기"],
-                value="스윙",
-            )
-            st.session_state['trading_period'] = trading_period
-
-        apply_chat_settings_button = st.button("설정 적용하기", use_container_width=True, type="primary")
-        if apply_chat_settings_button:
+        # 설정 적용 버튼
+        if st.button("설정 적용하기", use_container_width=True, type="primary", key="apply_settings"):
             st.success("설정이 적용되었습니다.")
         
 

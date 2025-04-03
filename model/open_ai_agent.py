@@ -1028,6 +1028,35 @@ def create_agent(model_options):
             elif msg["role"] == "assistant":
                 context += f"AI: {msg['content']}\n"
         context += "\n"
+    
+    # 자동 거래 에이전트 정보 추가
+    auto_trader_info = ""
+    if 'auto_trader' in st.session_state and st.session_state.auto_trader:
+        trader = st.session_state.auto_trader
+        
+        # 자동 거래 에이전트 설정 정보
+        auto_trader_info += "\n\n# 자동 거래 에이전트 정보\n"
+        auto_trader_info += f"자동 거래 에이전트는 사용자의 계정에서 자동으로 거래를 실행할 수 있습니다.\n"
+        
+        if trader.is_running:
+            status_info = trader.get_status()
+            auto_trader_info += f"현재 상태: **실행 중**\n"
+            auto_trader_info += f"설정: 분석 간격 {trader.interval_minutes}분, 최대 투자금 {trader.max_investment:,}원, "
+            auto_trader_info += f"일일 최대 거래 횟수 {trader.max_trading_count}회 (현재 {status_info['daily_trading_count']}회 사용)\n"
+            
+            # 거래 전략
+            auto_trader_info += f"거래 전략: 위험 성향 '{trader.risk_level}', 관심 코인 {', '.join(trader.target_coins)}\n"
+            
+            # 최근 거래 내역
+            if trader.trading_history:
+                auto_trader_info += "\n## 최근 거래 내역\n"
+                recent_trades = trader.trading_history[-3:] if trader.trading_history else []
+                for trade in reversed(recent_trades):
+                    action = "매수" if trade.get("action") == "buy" else "매도"
+                    auto_trader_info += f"- {trade.get('timestamp')}: {action} {trade.get('ticker')} {trade.get('amount')}\n"
+        else:
+            auto_trader_info += "현재 상태: **중지됨**\n"
+            auto_trader_info += "자동 거래를 시작하려면 '자동 거래' 탭에서 '에이전트 시작' 버튼을 클릭하세요.\n"
 
     # Agent 생성
     agent = Agent(
@@ -1041,6 +1070,8 @@ def create_agent(model_options):
         사용자 맞춤 지시: {user_requirement}
         위험 성향: {risk_style}
         거래 기간: {trading_period}
+        
+        {auto_trader_info}
 
         사용 가능한 참조 문서 목록: {", ".join(pdf_files_base)}
         """,
@@ -1065,6 +1096,54 @@ async def stream_openai_response(prompt, model_options, conversation_id=None):
         return
     
     try:
+        # 자동 거래 에이전트 정보 추가
+        auto_trader_info = ""
+        if 'auto_trader' in st.session_state and st.session_state.auto_trader:
+            trader = st.session_state.auto_trader
+            
+            # 자동 거래 에이전트가 활성화되어 있는지 확인
+            if trader.is_running:
+                status_info = trader.get_status()
+                auto_trader_info += "\n\n## 자동 거래 에이전트 상태\n"
+                auto_trader_info += f"- 상태: {status_info['status']} (실행 중)\n"
+                auto_trader_info += f"- 마지막 분석: {status_info['last_check'] or '없음'}\n"
+                auto_trader_info += f"- 다음 분석: {status_info['next_check'] or '준비 중...'}\n"
+                auto_trader_info += f"- 일일 거래 횟수: {status_info['daily_trading_count']} / {status_info['max_trading_count']}\n"
+                
+                # 최근 거래 기록
+                if trader.trading_history:
+                    auto_trader_info += "\n### 최근 거래 내역\n"
+                    recent_trades = trader.trading_history[-3:] if trader.trading_history else []
+                    for trade in reversed(recent_trades):
+                        auto_trader_info += f"- {trade.get('timestamp')}: {trade.get('action')} {trade.get('ticker')} {trade.get('amount')}\n"
+                
+                # 포트폴리오 정보
+                portfolio = trader.get_portfolio()
+                if portfolio:
+                    auto_trader_info += "\n### 포트폴리오 정보\n"
+                    for item in portfolio:
+                        ticker = item["ticker"]
+                        amount = item["amount"]
+                        value = item["value"]
+                        
+                        if ticker == "KRW":
+                            auto_trader_info += f"- 보유 원화: {int(amount):,}원\n"
+                        else:
+                            auto_trader_info += f"- {ticker}: {amount:.8f} (가치: {int(value):,}원)\n"
+                
+                # 시장 정보
+                market_info = trader.get_market_info()
+                if market_info:
+                    auto_trader_info += "\n### 시장 정보\n"
+                    for coin, info in market_info.items():
+                        price = info["current_price"]
+                        change_rate = info["change_rate"]
+                        auto_trader_info += f"- {coin}: 현재가 {int(price):,}원, 변동률 {change_rate:.2f}%\n"
+            else:
+                auto_trader_info += "\n\n## 자동 거래 에이전트\n"
+                auto_trader_info += "- 상태: 중지됨 (자동 거래가 실행 중이지 않습니다)\n"
+                auto_trader_info += "- 자동 거래를 시작하려면 '자동 거래' 탭에서 '에이전트 시작' 버튼을 클릭하세요.\n"
+        
         # 대화 기록 유지를 위한 RunConfig 생성
         run_config = None
         if conversation_id:
@@ -1076,9 +1155,9 @@ async def stream_openai_response(prompt, model_options, conversation_id=None):
         
         # 대화 기록이 있는 경우 full_prompt에 포함
         if len(st.session_state.get('messages', [])) > 1 and prompt:
-            full_prompt = f"{prompt}"
+            full_prompt = f"{prompt}{auto_trader_info}"
         else:
-            full_prompt = prompt
+            full_prompt = f"{prompt}{auto_trader_info}"
         
         print(f"Runner.run_streamed 호출 전")
         

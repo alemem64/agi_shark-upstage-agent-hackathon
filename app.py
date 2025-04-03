@@ -22,6 +22,7 @@ from page.portfolio import show_portfolio
 from page.trade_history import show_trade_history
 from page.api_setting import show_api_settings, init_api_session_state, reset_api_warning, check_api_keys
 from page.trade_strategy import show_trade_strategy
+from page.auto_trader_page import show_page as show_auto_trader_page
 # API 연동 성공 후 모든 캐시 초기화
 def refresh_all_data():
     """모든 데이터 캐시를 초기화하고 앱을 재실행합니다."""
@@ -56,8 +57,8 @@ cols = []
 # API 설정 탭은 항상 표시
 if has_api_keys:
     # API 키가 있으면 모든 탭 표시
-    col1, col2, col3, col4, col5 = st.columns(5)
-    cols = [col1, col2, col3, col4, col5]
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    cols = [col1, col2, col3, col4, col5, col6]
     
     with col1:
         if st.button("📊 거래소", use_container_width=True, 
@@ -73,18 +74,24 @@ if has_api_keys:
             reset_api_warning()
             st.rerun()
     with col3:
+        if st.button("🤖 자동 거래", use_container_width=True,
+                    type="primary" if st.session_state.selected_tab == "자동 거래" else "secondary"):
+            st.session_state.selected_tab = "자동 거래"
+            reset_api_warning()
+            st.rerun()
+    with col4:
         if st.button("📂 포트폴리오", use_container_width=True,
                     type="primary" if st.session_state.selected_tab == "포트폴리오" else "secondary"):
             st.session_state.selected_tab = "포트폴리오"
             reset_api_warning()
             st.rerun()
-    with col4:
+    with col5:
         if st.button("📝 거래 내역", use_container_width=True,
                     type="primary" if st.session_state.selected_tab == "거래 내역" else "secondary"):
             st.session_state.selected_tab = "거래 내역"
             reset_api_warning()
             st.rerun()
-    with col5:
+    with col6:
         if st.button("🔑 API 설정", use_container_width=True,
                     type="primary" if st.session_state.selected_tab == "API 설정" else "secondary"):
             st.session_state.selected_tab = "API 설정"
@@ -105,6 +112,8 @@ if st.session_state.selected_tab == "거래소":
     show_trade_market()
 elif st.session_state.selected_tab == "AI 투자 전략":
     show_trade_strategy()
+elif st.session_state.selected_tab == "자동 거래":
+    show_auto_trader_page()
 elif st.session_state.selected_tab == "포트폴리오":
     show_portfolio()
 elif st.session_state.selected_tab == "거래 내역":
