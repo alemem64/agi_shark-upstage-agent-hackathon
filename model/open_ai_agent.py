@@ -622,6 +622,14 @@ def create_agent(model_options):
             FunctionTool.from_defaults(fn=sell_coin_func),
             FunctionTool.from_defaults(fn=check_order_status_func)
         ]
+        
+        # 문서 파서 및 정보 추출 도구 추가
+        document_parser = DocumentParser()
+        if document_parser:
+            tools.append(FunctionTool.from_defaults(fn=document_parser, name="document_parser"))
+            
+        # 정보 추출 도구 추가
+        tools.append(FunctionTool.from_defaults(fn=information_extract, name="information_extract"))
     except Exception as e:
         log_error(e, "도구 생성 오류")
         # 최소한의 도구로 시도
