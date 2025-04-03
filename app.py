@@ -341,6 +341,68 @@ st.markdown("""
             padding: 0.3rem !important;
         }
     }
+
+    /* 채팅 UI 개선 */
+    [data-testid="stChatContainer"] {
+        height: 550px !important;
+        overflow-y: auto !important;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 10px !important;
+        background-color: #f9f9f9 !important;
+        padding: 15px !important;
+        margin-bottom: 15px !important;
+    }
+    
+    [data-testid="stChatMessage"] {
+        padding: 8px !important;
+        margin-bottom: 10px !important;
+    }
+    
+    [data-testid="stChatMessageContent"] {
+        padding: 10px !important;
+        border-radius: 15px !important;
+        max-width: 85% !important;
+        word-wrap: break-word !important;
+    }
+    
+    [data-testid="stChatMessage"][data-testid="user"] [data-testid="stChatMessageContent"] {
+        background-color: #e1f5fe !important;
+        float: right !important;
+        text-align: right !important;
+    }
+    
+    [data-testid="stChatMessage"][data-testid="assistant"] [data-testid="stChatMessageContent"] {
+        background-color: #ffffff !important;
+        float: left !important;
+        border: 1px solid #e0e0e0 !important;
+    }
+    
+    [data-testid="stChatInput"] {
+        border-radius: 20px !important;
+        padding: 10px 15px !important;
+        background-color: white !important;
+        border: 1px solid #e0e0e0 !important;
+        margin-top: 10px !important;
+    }
+    
+    /* 채팅 스크롤바 스타일 */
+    [data-testid="stChatContainer"]::-webkit-scrollbar {
+        width: 6px !important;
+    }
+    
+    [data-testid="stChatContainer"]::-webkit-scrollbar-track {
+        background: #f1f1f1 !important;
+        border-radius: 10px !important;
+    }
+    
+    [data-testid="stChatContainer"]::-webkit-scrollbar-thumb {
+        background: #888 !important;
+        border-radius: 10px !important;
+    }
+    
+    [data-testid="stChatContainer"]::-webkit-scrollbar-thumb:hover {
+        background: #555 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 

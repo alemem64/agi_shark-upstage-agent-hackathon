@@ -31,32 +31,48 @@ def show_sidebar():
         return "0분"
 
     with chat_tab:
+        # API 키 확인
+        if not st.session_state.get('openai_api_key') and not st.session_state.get('anthropic_api_key'):
+            st.warning("⚠️ API 키가 설정되지 않았습니다. 'API 설정' 탭에서 API 키를 설정해주세요.")
 
-        chat_container = st.container(height=600, border=True)
+        # 채팅 메시지 표시
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"], unsafe_allow_html=True)
+
+        # 자동 스크롤 JavaScript 추가
+        st.markdown("""
+        <script>
+            function scrollToBottom() {
+                const chatContainer = document.querySelector('[data-testid="stChatContainer"]');
+                if (chatContainer) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+            
+            // 페이지 로드 시 및 DOM 변경 시 스크롤
+            window.addEventListener('load', scrollToBottom);
+            const observer = new MutationObserver(scrollToBottom);
+            const chatContainer = document.querySelector('[data-testid="stChatContainer"]');
+            if (chatContainer) {
+                observer.observe(chatContainer, { childList: true, subtree: true });
+            }
+        </script>
+        """, unsafe_allow_html=True)
         
-        # 사용자 입력 처리 (채팅 컨테이너 아래에 배치)
-        user_prompt = st.chat_input(
-            placeholder="어떻게 투자할까요?",
-            accept_file=True,
-            file_type=None
-        )
-
-        # 채팅 기록 채우기 
-        with chat_container:
-            for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+        # 채팅 입력 및 파일 업로드
+        uploaded_file = st.file_uploader("문서 업로드 (선택사항)", type=["pdf", "txt", "docx"], key="chat_file_uploader")
+        
+        user_prompt = st.chat_input("어떻게 투자할까요?")
         
         if user_prompt:
             st.session_state.agent_run_count += 1
-            user_prompt_text = user_prompt.text if user_prompt.text else ""
-            user_prompt_file = user_prompt.get("files", [None])[0] if user_prompt.get("files") else None
             
             # 파일이 업로드된 경우 문서 분석 수행
             document_text = ""
-            if user_prompt_file:
+            if uploaded_file:
                 parser = DocumentParserAgent()
-                result = parser.parse_document(user_prompt_file.getvalue(), user_prompt_file.name)
+                result = parser.parse_document(uploaded_file.getvalue(), uploaded_file.name)
                 
                 if result['success']:
                     document_text = f"\n\n참고 문서 내용:\n{result['text']}"
@@ -68,79 +84,73 @@ def show_sidebar():
                     st.error(f"문서 분석 실패: {result['error']}")
             
             # 사용자 메시지와 문서 내용을 합쳐서 전달
-            full_prompt = user_prompt_text + document_text
-            st.session_state.messages.append({"role": "user", "content": user_prompt_text})
-
-            print(full_prompt)
+            full_prompt = user_prompt + document_text
             
-            # 스트리밍 방식으로 응답 생성 및 표시
-            with chat_container:
-                with st.chat_message("user"):
-                    st.markdown(user_prompt_text)
-                    
-                with st.chat_message("assistant"):
-                    response_placeholder = st.empty()
-                    # 스트리밍 응답 처리
-                    # 이벤트 루프 생성 및 관리 방식 변경
-                    full_response = ""
-                    sent_data = f"입력: {full_prompt[:50]}..., 모델: {st.session_state.model_options}"
-                    print(f"요청 데이터: {sent_data}")
-
+            # 사용자 메시지 추가
+            st.session_state.messages.append({"role": "user", "content": user_prompt})
+            
+            # 사용자 메시지 표시
+            with st.chat_message("user"):
+                st.markdown(user_prompt)
+            
+            # 어시스턴트 응답 생성 및 표시
+            with st.chat_message("assistant"):
+                message_placeholder = st.empty()
+                full_response = ""
+                
+                try:
+                    # 기존 이벤트 루프 가져오기 시도
                     try:
-                        # 기존 이벤트 루프 가져오기 시도
-                        try:
-                            loop = asyncio.get_event_loop()
-                        except RuntimeError:
-                            # 이벤트 루프가 없으면 새로 생성
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                        
-                        # 비동기 코루틴 함수
-                        async def process_chunks():
-                            nonlocal full_response
-                            full_response = ""
-                            try:
-                                async for chunk in stream_openai_response(
-                                    full_prompt,
-                                    st.session_state.model_options,
-                                    st.session_state.conversation_id
-                                ):
-                                    print(f"청크 수신: {len(chunk)} 바이트")
-                                    full_response += chunk
-                                    response_placeholder.markdown(full_response + "▌")
-                                
-                                response_placeholder.markdown(full_response)
-                                return full_response
-                            except Exception as e:
-                                error_msg = f"응답 생성 중 오류: {str(e)}"
-                                print(error_msg)
-                                response_placeholder.markdown(error_msg)
-                                return error_msg
-                        
-                        # 기존 루프에서 실행하거나 새 루프에서 실행
-                        if loop.is_running():
-                            print("기존 이벤트 루프 사용 중")
-                            task = asyncio.create_task(process_chunks())
-                            full_response = st.session_state.get("_temp_response", "")
-                            st.session_state["_temp_task"] = task
-                        else:
-                            print("새 이벤트 루프 실행")
-                            full_response = loop.run_until_complete(
-                                asyncio.wait_for(process_chunks(), timeout=60)
-                            )
-                        
-                        print(f"응답 완료: {len(full_response)} 자")
-                        
-                    except asyncio.TimeoutError:
-                        full_response = "응답 생성 시간이 초과되었습니다. 다시 시도해주세요."
-                        response_placeholder.markdown(full_response)
-                        print("타임아웃 발생")
-                    except Exception as e:
-                        full_response = f"오류 발생: {str(e)}"
-                        response_placeholder.markdown(full_response)
-                        print(f"예외 발생: {str(e)}")
+                        loop = asyncio.get_event_loop()
+                    except RuntimeError:
+                        # 이벤트 루프가 없으면 새로 생성
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
                     
-                    # 응답 기록에 저장
+                    # 응답 생성 함수
+                    async def generate_response():
+                        nonlocal full_response
+                        try:
+                            response_started = False
+                            async for chunk in stream_openai_response(
+                                full_prompt,
+                                st.session_state.model_options,
+                                st.session_state.conversation_id
+                            ):
+                                response_started = True
+                                full_response += chunk
+                                message_placeholder.markdown(full_response + "▌")
+                            
+                            if not response_started:
+                                return "응답을 생성할 수 없습니다. API 키 설정을 확인해주세요."
+                                
+                            message_placeholder.markdown(full_response)
+                            return full_response
+                        except Exception as e:
+                            error_msg = f"응답 생성 중 오류: {str(e)}"
+                            return error_msg
+                    
+                    # 응답 생성 실행
+                    if loop.is_running():
+                        task = asyncio.create_task(generate_response())
+                        st.session_state["_temp_task"] = task
+                    else:
+                        full_response = loop.run_until_complete(asyncio.wait_for(generate_response(), timeout=60))
+                        
+                        # 응답이 없는 경우 오류 메시지 표시
+                        if not full_response:
+                            full_response = "응답을 생성할 수 없습니다. API 키 설정을 확인해주세요."
+                            message_placeholder.markdown(full_response)
+                    
+                except asyncio.TimeoutError:
+                    full_response = "응답 생성 시간이 초과되었습니다. 다시 시도해주세요."
+                    message_placeholder.markdown(full_response)
+                except Exception as e:
+                    full_response = f"오류 발생: {str(e)}"
+                    message_placeholder.markdown(full_response)
+                
+                # 응답 저장
+                if full_response:
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     with chat_settings_tab:

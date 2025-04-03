@@ -316,7 +316,7 @@ async def buy_coin_func(ctx, args):
             if order_result and 'uuid' in order_result:
                 result = {
                     'success': True,
-                    'message': f"{ticker} {order_type} 매수 주문 성공",
+                    'message': f"{ticker} {order_type} 매수 주문이 접수되었습니다. 주문 ID: {order_result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
                     'order_id': order_result['uuid'],
                     'order_info': order_result
                 }
@@ -411,7 +411,7 @@ async def sell_coin_func(ctx, args):
             if order_result and 'uuid' in order_result:
                 result = {
                     'success': True,
-                    'message': f"{ticker} {order_type} 매도 주문 성공",
+                    'message': f"{ticker} {order_type} 매도 주문이 접수되었습니다. 주문 ID: {order_result['uuid']}\n주문 체결 결과는 '거래내역' 탭에서 확인하실 수 있습니다.",
                     'order_id': order_result['uuid'],
                     'order_info': order_result
                 }
@@ -809,24 +809,36 @@ def create_agent(model_options):
         tools.append(toggle_debug_mode_tool)
         log_info("디버그 모드 도구 추가됨")
     
+    # 에이전트에 전달할 시스템 지침
+    system_prompt = f"""
+    당신은 암호화폐 거래 AI 에이전트입니다. 사용자의 요청을 이해하고, 암호화폐 거래를 도와주세요.
+
+    {context}
+
+    현재 사용자의 위험 성향은 '{st.session_state.get('risk_style', '중립적')}'이며, 
+    거래 기간은 '{st.session_state.get('trading_period', '스윙')}'입니다.
+    사용자의 추가 요구사항: '{st.session_state.get('user_requirement', '')}'
+
+    중요 지침:
+    1. 사용자가 매도(판매)를 요청할 때는 반드시 현재 포트폴리오를 먼저 확인하여 보유 중인 코인만 매도할 수 있습니다.
+    2. 매도하려는 코인이 '거래가능코인목록'에 있더라도, 해당 코인을 실제로 보유하고 있는지는 반드시 '포트폴리오'를 통해 확인해야 합니다.
+    3. '포트폴리오'에 없는 코인은 보유하고 있지 않은 것이므로 매도할 수 없습니다.
+    4. 코인 매도 전에 get_coin_price_info 함수를 호출하여 보유량을 확인하세요.
+    5. 매수 주문 시에는 사용자의 위험 성향을 고려하여 적절한 금액을 추천하세요.
+    6. 매수/매도 주문 후에는 "상태: 대기 중"과 같은 메시지를 표시하지 말고, 대신 "주문이 접수되었습니다. '거래내역' 탭에서 주문 완료 여부를 확인하실 수 있습니다."와 같은 안내 메시지를 제공하세요.
+
+    특정 기능을 사용할 때마다 어떤 기능을 사용하는지 사용자에게 알려주세요.
+    예를 들어, "거래 가능한 코인 목록을 불러오겠습니다." 등의 메시지를 먼저 표시합니다.
+    
+    오류가 발생한 경우, 사용자에게 오류 내용을 명확히 설명하고 해결 방법을 제안해주세요.
+    API 키 설정 관련 문제는 API 설정 페이지로 안내하세요.
+
+    도구를 사용하여 작업을 완료하세요.
+    """
+    
     agent = Agent(
         name="Crypto Trading Assistant",
-        instructions=f"""
-        암호화폐 거래에 관한 질문에 답변하는 AI 어시스턴트입니다.
-        사용자의 투자 성향과 요구사항을 고려하여 도움을 제공합니다.
-        
-        {context}
-        
-        사용자 맞춤 지시: {user_requirement}
-        위험 성향: {risk_style}
-        거래 기간: {trading_period}
-
-        특정 기능을 사용할 때마다 어떤 기능을 사용하는지 사용자에게 알려주세요.
-        예를 들어, "거래 가능한 코인 목록을 불러오겠습니다." 등의 메시지를 먼저 표시합니다.
-        
-        오류가 발생한 경우, 사용자에게 오류 내용을 명확히 설명하고 해결 방법을 제안해주세요.
-        API 키 설정 관련 문제는 API 설정 페이지로 안내하세요.
-        """,
+        instructions=system_prompt,
         model=get_model_name(model_options),
         tools=tools,
     )
