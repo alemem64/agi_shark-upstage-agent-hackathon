@@ -27,7 +27,9 @@
 
 ### 권장 환경 (개발 버전)
 
-- Python 3.12.7
+- Python 3.12.7 (anaconda)
+
+### 필요 API
 - upstage API Key (Document Parser, Information Extracter)
 - OpenAI API Key (Open AI Agent, Websearch, VectorStore)
 - Upbit Access Key
