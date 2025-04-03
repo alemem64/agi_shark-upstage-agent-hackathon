@@ -79,7 +79,7 @@ def show_sidebar():
                             full_response = ""
                             try:
                                 async for chunk in stream_openai_response(
-                                    full_prompt,
+                                    user_prompt_text,
                                     st.session_state.model_options,
                                     st.session_state.conversation_id
                                 ):
