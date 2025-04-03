@@ -3,7 +3,7 @@ import asyncio
 import os
 
 from openai.types.responses import ResponseTextDeltaEvent
-from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig
+from agents import Agent, Runner, ModelSettings, function_tool, set_default_openai_key, RunConfig, WebSearchTool
 
 def get_model_name(model_options):
     if model_options == "claude 3.7 sonnet":
@@ -31,7 +31,7 @@ def create_agent(model_options):
     trading_period = st.session_state.get('trading_period', '스윙')
 
     pdf_files = [f for f in os.listdir("tools/web2pdf/always_see_doc_storage") if f.endswith('.pdf')]
-    print(pdf_files)
+
     # 이전 메시지 가져오기
     previous_messages = st.session_state.get('messages', [])
     context = ""
@@ -62,7 +62,7 @@ def create_agent(model_options):
         참조 문서: {pdf_files}
         """,
         model=get_model_name(model_options),
-        tools=[],
+        tools=[WebSearchTool()],
     )
     
     return agent
