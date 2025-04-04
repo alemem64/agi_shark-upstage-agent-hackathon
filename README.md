@@ -23,18 +23,25 @@
    - PDF와 RAG 문서를 통한 대용량 투자 지침 관리
 
 
-## 🚀 시작하기
 
-### 권장 환경 (개발 버전)
+## 권장 환경 (개발 버전)
 
 - Python 3.11.11
 
-### 필요 API
-- upstage API Key (Document Parser, Information Extracter)
-- OpenAI API Key (Open AI Agent, Websearch, VectorStore)
-- Upbit Access Key
-- Upbit Secret Key
-- X Bearer Key (검색)
+## 필요 API
+1. upstage API Key (Document Parser, Information Extracter)
+2. OpenAI API Key (Open AI Agent, Websearch, VectorStore)
+   - 아레 링크에서 발급
+   - https://platform.openai.com/api-keys
+3. Upbit Access Key, Secret Key
+   - K뱅크 계좌 개설
+   - 아래 링크에서 발급 (한 Key는 동시에 한 IP주소에서 사용 가능)
+   - https://upbit.com/mypage/open_api_management
+4. X Bearer Token (검색)
+   - 아래 링크 접속 후 로그인    
+   - https://developer.x.com/en/portal/dashboard
+   - Project App 내의 열쇠 클릭
+   - Authentication Tokens의 Bearer Token 토큰 발급
 
 ### 설치 방법
 
