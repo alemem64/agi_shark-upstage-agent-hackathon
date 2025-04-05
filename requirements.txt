@@ -24,7 +24,6 @@ Pillow
 tweepy
 typing
 datetime
-sys
 UPBIT
 
 schedule
